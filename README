@@ -1,0 +1,8 @@
+This project will contain 4 specific sub-projects:
+
+* Appia
+* JGroups
+* Spread
+* YAMI4
+
+Project code for each sub-project should be contained to the sub-project root. If there is any common code, please make a new directory at this level so all projects may use it properly.
