@@ -1,3 +1,9 @@
+Nov 07, 2011:
+- Pub-sub video streaming enabled
+- Client receives frames from server and properly displays them
+- Issue found where server crashes once EOF is found in video
+- Need to cause video streaming to loop
+
 Nov 05, 2011:
 - Initial test with messaging using YAMI system.
 - Created single client-server program which sends a message to the server and replies back to the client
