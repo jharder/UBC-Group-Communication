@@ -1,3 +1,15 @@
+Nov 07, 2011:
+- Pub-sub video streaming enabled
+- Client receives frames from server and properly displays them
+- Issue found where server crashes once EOF is found in video
+- Need to cause video streaming to loop
+
+Nov 05, 2011:
+- Initial test with messaging using YAMI system.
+- Created single client-server program which sends a message to the server and replies back to the client
+- Will use this as a basis for sending more complex packets in the form of frames of a video from server to client
+- Need to consider looking at publisher-subscriber model?  Or should the server continually send out the video and let the client decide when to join?
+
 Oct 26, 2011:
 - Initial update by Jared Harder. Will add files in coming days.
 - Finished documenting GitHub specific commands and sent email.
