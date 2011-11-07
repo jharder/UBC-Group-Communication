@@ -4,9 +4,8 @@
 package yami;
 
 import com.inspirel.yami.Agent;
-import com.inspirel.yami.IncomingMessage;
-import com.inspirel.yami.IncomingMessageCallback;
 import com.inspirel.yami.Parameters;
+import com.inspirel.yami.ValuePublisher;
 import com.inspirel.yami.YAMIIOException;
 
 /**
@@ -14,25 +13,9 @@ import com.inspirel.yami.YAMIIOException;
  *
  */
 public class Server {
+	static VideoStream video;
+
 	public Server() {}
-	
-	private static class Messager implements IncomingMessageCallback {
-		@Override
-		public void call(IncomingMessage im) throws Exception {
-			Parameters param = im.getParameters();
-			
-			long time = param.getLong("theTime");
-			
-			System.out.println("The server received a time of "+ time +". Replying...");
-			Thread.sleep(2000);
-			
-			Parameters replyParam = new Parameters();
-			long[] reply = {time, System.currentTimeMillis()};
-			replyParam.setLongArray("reply", reply);
-			
-			im.reply(replyParam);
-		}
-	}
 
 	/**
 	 * @param args
@@ -40,18 +23,30 @@ public class Server {
 	 */
 	public static void main(String[] args) throws InterruptedException {
 		String serverAddress = "tcp://127.0.0.1:3334";
-		
+		byte[] buf = new byte[15000];
+
 		try {
+			video = new VideoStream("C:\\movie.Mjpeg");
+
 			Agent serverAgent = new Agent();
+			Parameters param = new Parameters();
+			ValuePublisher valPub = new ValuePublisher();
+
 			serverAgent.addListener(serverAddress);
-			serverAgent.registerObject("server", new Messager());
-			
+			serverAgent.registerValuePublisher("server", valPub);
+
 			while (true) {
-				Thread.sleep(10000);
+				video.getNextFrame(buf);
+				//param.setLong("time", System.currentTimeMillis());
+				param.setBinary("videoFrame", buf);
+				valPub.publish(param);
+
+				Thread.sleep(100);
 			}
 		} catch (YAMIIOException e) {
-			// TODO Auto-generated catch block
-			System.out.println(e.getMessage());
+			System.out.println("server: "+e.getMessage());
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 }
