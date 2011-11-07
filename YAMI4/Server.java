@@ -22,7 +22,7 @@ public class Server {
 	 * @throws InterruptedException 
 	 */
 	public static void main(String[] args) throws InterruptedException {
-		String serverAddress = "tcp://127.0.0.1:3334";
+		String serverAddress = "tcp://192.168.1.65:3334";
 		byte[] buf = new byte[15000];
 
 		try {
@@ -41,7 +41,7 @@ public class Server {
 				param.setBinary("videoFrame", buf);
 				valPub.publish(param);
 
-				Thread.sleep(100);
+				Thread.sleep(42);
 			}
 		} catch (YAMIIOException e) {
 			System.out.println("server: "+e.getMessage());
