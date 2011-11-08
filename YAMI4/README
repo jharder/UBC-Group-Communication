@@ -1,3 +1,8 @@
+Nov 07, 2011 (second update):
+- Video looping enabled (see VideoStream.java)
+- Video streams at ~24fps (normal NTSC speed)
+- Server/client hard-coded to use my local IP. Change binding address to test
+
 Nov 07, 2011:
 - Pub-sub video streaming enabled
 - Client receives frames from server and properly displays them

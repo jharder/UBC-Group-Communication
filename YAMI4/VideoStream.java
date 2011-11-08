@@ -7,15 +7,14 @@ public class VideoStream {
 
 	FileInputStream fis; //video file
 	int frame_nb; //current frame nb
+	String filename;
 
 	//-----------------------------------
 	//constructor
 	//-----------------------------------
 	public VideoStream(String filename) throws Exception {
-
-		//init variables
-		fis = new FileInputStream(filename);
-		frame_nb = 0;
+		this.filename = filename;
+		Initialize(filename);
 	}
 
 	//-----------------------------------
@@ -26,6 +25,11 @@ public class VideoStream {
 		int length = 0;
 		String length_string;
 		byte[] frame_length = new byte[5];
+		
+		if (fis.available() <= 0) {
+			fis.close();
+			Initialize(filename);
+		}
 
 		//read current frame length
 		fis.read(frame_length, 0, 5);
@@ -35,5 +39,9 @@ public class VideoStream {
 		length = Integer.parseInt(length_string);
 
 		return fis.read(frame, 0, length);
+	}
+	
+	private void Initialize(String filename) throws FileNotFoundException {
+		fis = new FileInputStream(filename);
 	}
 }

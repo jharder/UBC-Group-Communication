@@ -32,20 +32,6 @@ public class Client {
 	static JLabel iconLabel = new JLabel();
 	static ImageIcon icon;
 
-	//RTSP variables
-	//----------------
-	//rtsp states
-	final static int INIT = 0;
-	final static int READY = 1;
-	final static int PLAYING = 2;
-	//rtsp message types
-	final static int SETUP = 3;
-	final static int PLAY = 4;
-	final static int PAUSE = 5;
-	final static int TEARDOWN = 6;
-
-	static int state; //RTSP Server state == INIT or READY or PLAY
-
 	public Client() {
 		//build GUI
 		//--------------------------
@@ -90,7 +76,7 @@ public class Client {
 	 */
 	public static void main(String[] args) {
 		new Client();
-		String serverAddress = "tcp://127.0.0.1:3334";
+		String serverAddress = "tcp://192.168.1.65:3334";
 
 		try {
 			Agent clientAgent = new Agent();
