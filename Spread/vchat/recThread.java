@@ -229,7 +229,7 @@ public class recThread extends Thread implements Runnable {
 				byte data[] = msg.getData();
 				System.out.println("The data is " + data.length + " bytes.");
 				
-				System.out.println("The message is: " + new String(data));
+//				System.out.println("The message is: " + new String(data));
 				
 				
 /*				RTPpacket next_packet = (RTPpacket)data;

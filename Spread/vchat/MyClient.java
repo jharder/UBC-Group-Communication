@@ -14,7 +14,6 @@ import spread.SpreadException;
 
 public class MyClient{
 	
-	final static String CRLF = "\r\n";
 	private SpreadConnection connection;
 	private recThread rt;
 

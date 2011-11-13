@@ -7,42 +7,39 @@ package vchat;
    ---------------------- */
 
 
-import java.io.*;
-import java.net.*;
-import java.awt.*;
-import java.util.*;
-import java.awt.event.*;
-//import javax.swing.*;
-import javax.swing.Timer;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 import spread.SpreadConnection;
 import spread.SpreadException;
 import spread.SpreadMessage;
 
-public class Server implements ActionListener {
+public class Server /*implements ActionListener*/ {
 
 	//RTP variables:
 	//----------------
-	DatagramSocket RTPsocket; //socket to be used to send and receive UDP packets
-	DatagramPacket senddp; //UDP packet containing the video frames
-
-	InetAddress ClientIPAddr; //Client IP address
-	int RTP_dest_port = 0; //destination port for RTP packets  (given by the RTSP Client)
+//	DatagramSocket RTPsocket; //socket to be used to send and receive UDP packets
+//	DatagramPacket senddp; //UDP packet containing the video frames
+//
+//	InetAddress ClientIPAddr; //Client IP address
+//	int RTP_dest_port = 0; //destination port for RTP packets  (given by the RTSP Client)
 
 	//Video variables:
 	//----------------
-	int imagenb = 0; //image nb of the image currently transmitted
+//	int imagenb = 0; //image nb of the image currently transmitted
 	VideoStream video; //VideoStream object used to access video frames
-	static int MJPEG_TYPE = 26; //RTP payload type for MJPEG video
+//	static int MJPEG_TYPE = 26; //RTP payload type for MJPEG video
 	static int FRAME_PERIOD = 100; //Frame period of the video to stream, in ms
-	static int VIDEO_LENGTH = 500; //length of the video in frames
+//	static int VIDEO_LENGTH = 500; //length of the video in frames
 
-	Timer timer; //timer used to send the images at the video frame rate
+//	Timer timer; //timer used to send the images at the video frame rate
 	byte[] buf; //buffer used to store the images to send to the client 
 
 	static String VideoFileName; //video file requested from the client
 
-	final static String CRLF = "\r\n";
+//	final static String CRLF = "\r\n";
 
 	//Spread variables:
 	//-----------------
@@ -75,14 +72,38 @@ public class Server implements ActionListener {
 		}
 
 		//init Timer
-		timer = new Timer(FRAME_PERIOD, this);
-		timer.setInitialDelay(0);
-		timer.setCoalesce(true);
+//		timer = new Timer(FRAME_PERIOD, this);
+//		timer.setInitialDelay(0);
+//		timer.setCoalesce(true);
 
 		//allocate memory for the sending buffer
 		buf = new byte[15000]; 
 	}
 
+	//--------------------------------
+	//Sends a frame
+	//--------------------------------
+	private void sendFrame() {
+		try {
+			SpreadMessage msg = new SpreadMessage();
+			msg.addGroup(group);
+			
+			//get next frame to send from the video
+			video.getNextFrame(buf);
+
+			msg.setData(buf);
+			
+			// Send the message.
+			////////////////////
+			connection.multicast(msg);
+		}
+		catch(Exception ex)
+		{
+			System.out.println("Exception caught: "+ex);
+			System.exit(0);
+		}
+	}
+	
 	//------------------------------------
 	//main
 	//------------------------------------
@@ -160,15 +181,20 @@ public class Server implements ActionListener {
 		theServer.video = new VideoStream(VideoFileName);
 
 		//start timer
-		theServer.timer.start();
-		while(true);
+//		theServer.timer.start();
+//		while(true);
+		
+		while(true) {
+			theServer.sendFrame();
+			Thread.sleep(FRAME_PERIOD);
+		}
 	}
 
 
 	//------------------------
 	//Handler for timer
 	//------------------------
-	public void actionPerformed(ActionEvent e) {
+/*	public void actionPerformed(ActionEvent e) {
 
 		//if the current image nb is less than the length of the video
 		if (imagenb < VIDEO_LENGTH)
@@ -203,4 +229,6 @@ public class Server implements ActionListener {
 			timer.stop();
 		}
 	}
+*/
 }
+

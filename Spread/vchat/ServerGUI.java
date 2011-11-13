@@ -203,7 +203,7 @@ public class ServerGUI extends JFrame implements ActionListener {
 
 			try {
 				//get next frame to send from the video, as well as its size
-				int image_length = video.getnextframe(buf);
+				int image_length = video.getNextFrame(buf);
 
 				//Builds an RTPpacket object containing the frame
 				RTPpacket rtp_packet = new RTPpacket(MJPEG_TYPE, imagenb, imagenb*FRAME_PERIOD, buf, image_length);

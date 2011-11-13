@@ -1,412 +1,324 @@
-/*Client.java*/
+/* Client.java
+ *
+ * Contains source from the Spread toolkit, distributed under the following licence:
+ * 
+ * Copyright (c) 1993-2006 Spread Concepts LLC. All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer and request.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer and request in the documentation and/or other materials provided with the distribution.
+ * 
+ * 3. All advertising materials (including web pages) mentioning features or use of this software, or software that uses this software, must display the following acknowledgment: "This product uses software developed by Spread Concepts LLC for use in the Spread toolkit. For more information about Spread see http://www.spread.org"
+ * 
+ * 4. The names "Spread" or "Spread toolkit" must not be used to endorse or promote products derived from this software without prior written permission.
+ * 
+ * 5. Redistributions of any form whatsoever must retain the following acknowledgment:
+ * "This product uses software developed by Spread Concepts LLC for use in the Spread toolkit. For more information about Spread, see http://www.spread.org"
+ * 
+ * 6. This license shall be governed by and construed and enforced in accordance with the laws of the State of Maryland, without reference to its conflicts of law provisions. The exclusive jurisdiction and venue for all legal actions relating to this license shall be in courts of competent subject matter jurisdiction located in the State of Maryland.
+ * 
+ * TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, SPREAD IS PROVIDED UNDER THIS LICENSE ON AN AS IS BASIS, WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, WITHOUT LIMITATION, WARRANTIES THAT SPREAD IS FREE OF DEFECTS, MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE OR NON-INFRINGING. ALL WARRANTIES ARE DISCLAIMED AND THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE CODE IS WITH YOU. SHOULD ANY CODE PROVE DEFECTIVE IN ANY RESPECT, YOU (NOT THE COPYRIGHT HOLDER OR ANY OTHER CONTRIBUTOR) ASSUME THE COST OF ANY NECESSARY SERVICING, REPAIR OR CORRECTION. THIS DISCLAIMER OF WARRANTY CONSTITUTES AN ESSENTIAL PART OF THIS LICENSE. NO USE OF ANY CODE IS AUTHORIZED HEREUNDER EXCEPT UNDER THIS DISCLAIMER.
+ * 
+ * TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE COPYRIGHT HOLDER OR ANY OTHER CONTRIBUTOR BE LIABLE FOR ANY SPECIAL, INCIDENTAL, INDIRECT, OR CONSEQUENTIAL DAMAGES FOR LOSS OF PROFITS, REVENUE, OR FOR LOSS OF INFORMATION OR ANY OTHER LOSS.
+ * 
+ * YOU EXPRESSLY AGREE TO FOREVER INDEMNIFY, DEFEND AND HOLD HARMLESS THE COPYRIGHT HOLDERS AND CONTRIBUTORS OF SPREAD AGAINST ALL CLAIMS, DEMANDS, SUITS OR OTHER ACTIONS ARISING DIRECTLY OR INDIRECTLY FROM YOUR ACCEPTANCE AND USE OF SPREAD.
+ * 
+ * Although NOT REQUIRED, we at Spread Concepts would appreciate it if active users of Spread put a link on their web site to Spread's web site when possible. We also encourage users to let us know who they are, how they are using Spread, and any comments they have through either e-mail (spread@spread.org) or our web site at (http://www.spread.org/comments).
+ * 
+ */
 
 /* ------------------
    Client
-   usage: java Client [Server hostname] [Server RTSP listening port] [Video file requested]
+   usage: java Client ...
    ---------------------- */
 package vchat;
 
-import java.io.*;
-import java.net.*;
-import java.util.*;
-import java.awt.*;
-import java.awt.event.*;
-import javax.swing.*;
-import javax.swing.Timer;
+import java.awt.Image;
+import java.awt.Toolkit;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
-public class Client{
+import javax.swing.ImageIcon;
 
-	//GUI
-	//----
-	JFrame f = new JFrame("Client");
-	JButton setupButton = new JButton("Setup");
-	JButton playButton = new JButton("Play");
-	JButton pauseButton = new JButton("Pause");
-	JButton tearButton = new JButton("Teardown");
-	JPanel mainPanel = new JPanel();
-	JPanel buttonPanel = new JPanel();
-	JLabel iconLabel = new JLabel();
-	ImageIcon icon;
+import spread.MembershipInfo;
+import spread.SpreadConnection;
+import spread.SpreadException;
+import spread.SpreadGroup;
+import spread.SpreadMessage;
 
 
-	//RTP variables:
-	//----------------
-	DatagramPacket rcvdp; //UDP packet received from the server
-	DatagramSocket RTPsocket; //socket to be used to send and receive UDP packets
-	static int RTP_RCV_PORT = 25000; //port where the client will receive the RTP packets
+public class Client extends Thread implements Runnable {
+	
+	static String VideoFileName; //video file requested from the client
+	private SpreadConnection connection;
+	SpreadGroup group;
+	
+	public Client(String user, String address, int port, String groupToJoin) {
+		//Establish the spread connection.
+		//--------------------------------
+		try
+		{
+			connection = new SpreadConnection();
+			connection.connect(InetAddress.getByName(address), port, user, false, true);
 
-	Timer timer; //timer used to receive data from the UDP socket
-	byte[] buf; //buffer used to store data received from the server 
-
-	//RTSP variables
-	//----------------
-	//rtsp states 
-	final static int INIT = 0;
-	final static int READY = 1;
-	final static int PLAYING = 2;
-	static int state; //RTSP state == INIT or READY or PLAYING
-	Socket RTSPsocket; //socket used to send/receive RTSP messages
-	//input and output stream filters
-	static BufferedReader RTSPBufferedReader;
-	static BufferedWriter RTSPBufferedWriter;
-	static String VideoFileName; //video file to request to the server
-	int RTSPSeqNb = 0; //Sequence number of RTSP messages within the session
-	int RTSPid = 0; //ID of the RTSP session (given by the RTSP Server)
-
-	final static String CRLF = "\r\n";
-
-	//Video constants:
-	//------------------
-	static int MJPEG_TYPE = 26; //RTP payload type for MJPEG video
-
-	//--------------------------
-	//Constructor
-	//--------------------------
-	public Client() {
-
-		//build GUI
-		//--------------------------
-
-		//Frame
-		f.addWindowListener(new WindowAdapter() {
-			public void windowClosing(WindowEvent e) {
-				System.exit(0);
-			}
-		});
-
-		//Buttons
-		buttonPanel.setLayout(new GridLayout(1,0));
-		buttonPanel.add(setupButton);
-		buttonPanel.add(playButton);
-		buttonPanel.add(pauseButton);
-		buttonPanel.add(tearButton);
-		setupButton.addActionListener(new setupButtonListener());
-		playButton.addActionListener(new playButtonListener());
-		pauseButton.addActionListener(new pauseButtonListener());
-		tearButton.addActionListener(new tearButtonListener());
-
-		//Image display label
-		iconLabel.setIcon(null);
-
-		//frame layout
-		mainPanel.setLayout(null);
-		mainPanel.add(iconLabel);
-		mainPanel.add(buttonPanel);
-		iconLabel.setBounds(0,0,380,280);
-		buttonPanel.setBounds(0,280,380,50);
-
-		f.getContentPane().add(mainPanel, BorderLayout.CENTER);
-		f.setSize(new Dimension(390,370));
-		f.setVisible(true);
-
-		//init timer
-		//--------------------------
-		timer = new Timer(20, new timerListener());
-		timer.setInitialDelay(0);
-		timer.setCoalesce(true);
-
-		//allocate enough memory for the buffer used to receive data from the server
-		buf = new byte[15000];    
+		}
+		catch(SpreadException e)
+		{
+			System.err.println("There was an error connecting to the daemon.");
+			e.printStackTrace();
+			System.exit(1);
+		}
+		catch(UnknownHostException e)
+		{
+			System.err.println("Can't find the daemon " + address);
+			System.exit(1);
+		}
+		
+		group = new SpreadGroup();
+		try {
+			group.join(connection, groupToJoin);
+		} catch (SpreadException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
 	}
 
+	// Print this membership data.  Does so in a generic way so identical
+	// function is used in recThread and User. 
+	private void printMembershipInfo(MembershipInfo info) 
+	{
+        SpreadGroup group = info.getGroup();
+		if(info.isRegularMembership()) {
+			SpreadGroup members[] = info.getMembers();
+			MembershipInfo.VirtualSynchronySet virtual_synchrony_sets[] = info.getVirtualSynchronySets();
+			MembershipInfo.VirtualSynchronySet my_virtual_synchrony_set = info.getMyVirtualSynchronySet();
+
+			System.out.println("REGULAR membership for group " + group +
+					   " with " + members.length + " members:");
+			for( int i = 0; i < members.length; ++i ) {
+				System.out.println("\t\t" + members[i]);
+			}
+			System.out.println("Group ID is " + info.getGroupID());
+
+			System.out.print("\tDue to ");
+			if(info.isCausedByJoin()) {
+				System.out.println("the JOIN of " + info.getJoined());
+			}	else if(info.isCausedByLeave()) {
+				System.out.println("the LEAVE of " + info.getLeft());
+			}	else if(info.isCausedByDisconnect()) {
+				System.out.println("the DISCONNECT of " + info.getDisconnected());
+			} else if(info.isCausedByNetwork()) {
+				System.out.println("NETWORK change");
+				for( int i = 0 ; i < virtual_synchrony_sets.length ; ++i ) {
+					MembershipInfo.VirtualSynchronySet set = virtual_synchrony_sets[i];
+					SpreadGroup         setMembers[] = set.getMembers();
+					System.out.print("\t\t");
+					if( set == my_virtual_synchrony_set ) {
+						System.out.print( "(LOCAL) " );
+					} else {
+						System.out.print( "(OTHER) " );
+					}
+					System.out.println( "Virtual Synchrony Set " + i + " has " +
+							    set.getSize() + " members:");
+					for( int j = 0; j < set.getSize(); ++j ) {
+						System.out.println("\t\t\t" + setMembers[j]);
+					}
+				}
+			}
+		} else if(info.isTransition()) {
+			System.out.println("TRANSITIONAL membership for group " + group);
+		} else if(info.isSelfLeave()) {
+			System.out.println("SELF-LEAVE message for group " + group);
+		}
+	}
+	
+	private void handleMessage(SpreadMessage msg) {
+		try
+		{
+   	        System.out.println("*****************RECTHREAD Received Message************");
+			if(msg.isRegular())	{
+				System.out.print("Received a ");
+				if(msg.isUnreliable())
+					System.out.print("UNRELIABLE");
+				else if(msg.isReliable())
+					System.out.print("RELIABLE");
+				else if(msg.isFifo())
+					System.out.print("FIFO");
+				else if(msg.isCausal())
+					System.out.print("CAUSAL");
+				else if(msg.isAgreed())
+					System.out.print("AGREED");
+				else if(msg.isSafe())
+					System.out.print("SAFE");
+				System.out.println(" message.");
+				
+				System.out.println("Sent by  " + msg.getSender() + ".");
+				
+				System.out.println("Type is " + msg.getType() + ".");
+				
+				if(msg.getEndianMismatch() == true)
+					System.out.println("There is an endian mismatch.");
+				else
+					System.out.println("There is no endian mismatch.");
+				
+				SpreadGroup groups[] = msg.getGroups();
+				System.out.println("To " + groups.length + " groups.");
+				
+				byte data[] = msg.getData();
+				System.out.println("The data is " + data.length + " bytes.");
+				
+				// TODO:
+				// TODO:
+				// TODO:
+				// TODO: (This is important!)
+				// TODO: Pass msg (or data) to the Receiver object created for the sender of this message
+			} else if ( msg.isMembership() ) {
+				MembershipInfo info = msg.getMembershipInfo();
+				printMembershipInfo(info);
+			} else if ( msg.isReject() ) {
+			    // Received a Reject message 
+				System.out.print("Received a ");
+				if(msg.isUnreliable())
+					System.out.print("UNRELIABLE");
+				else if(msg.isReliable())
+					System.out.print("RELIABLE");
+				else if(msg.isFifo())
+					System.out.print("FIFO");
+				else if(msg.isCausal())
+					System.out.print("CAUSAL");
+				else if(msg.isAgreed())
+					System.out.print("AGREED");
+				else if(msg.isSafe())
+					System.out.print("SAFE");
+				System.out.println(" REJECTED message.");
+				
+				System.out.println("Sent by  " + msg.getSender() + ".");
+				
+				System.out.println("Type is " + msg.getType() + ".");
+				
+				if(msg.getEndianMismatch() == true)
+					System.out.println("There is an endian mismatch.");
+				else
+					System.out.println("There is no endian mismatch.");
+				
+				SpreadGroup groups[] = msg.getGroups();
+				System.out.println("To " + groups.length + " groups.");
+				
+				byte data[] = msg.getData();
+				System.out.println("The data is " + data.length + " bytes.");
+				
+				System.out.println("The message is: " + new String(data));
+			} else {
+			    System.out.println("Message is of unknown type: " + msg.getServiceType() );
+			}
+		}
+		catch(Exception e)
+		{
+			e.printStackTrace();
+			System.exit(1);
+		}
+	}
+
+	/*
+	 * Monitors for users joining or leaving, and creates and tears down
+	 * receiver threads accordingly
+	 */
+	public void run() {
+		while(true) {
+			try {
+				handleMessage(connection.receive());
+			} catch(Exception e) {
+				
+			}
+			
+		}
+	}
+	
 	//------------------------------------
 	//main
 	//------------------------------------
 	public static void main(String argv[]) throws Exception
 	{
-		//Create a Client object
-		Client theClient = new Client();
-
-		//get server RTSP port and IP address from the command line
-		//------------------
-		int RTSP_server_port = Integer.parseInt(argv[1]);
-		String ServerHost = argv[0];
-		InetAddress ServerIPAddr = InetAddress.getByName(ServerHost);
-
-		//get video filename to request:
-		VideoFileName = argv[2];
-
-		//Establish a TCP connection with the server to exchange RTSP messages
-		//------------------
-		theClient.RTSPsocket = new Socket(ServerIPAddr, RTSP_server_port);
-
-		//Set input and output stream filters:
-		RTSPBufferedReader = new BufferedReader(new InputStreamReader(theClient.RTSPsocket.getInputStream()) );
-		RTSPBufferedWriter = new BufferedWriter(new OutputStreamWriter(theClient.RTSPsocket.getOutputStream()) );
-
-		//init RTSP state:
-		state = INIT;
-	}
-
-
-	//------------------------------------
-	//Handler for buttons
-	//------------------------------------
-
-	//.............
-	//TO COMPLETE
-	//.............
-
-	//Handler for Setup button
-	//-----------------------
-	class setupButtonListener implements ActionListener{
-		public void actionPerformed(ActionEvent e){
-
-			//System.out.println("Setup Button pressed !");      
-
-			if (state == INIT) 
+		// Set default values.
+		String user = new String("User");
+		String address = null;
+		int port = 0;
+		String groupToJoin = new String("Group");
+		
+		boolean gotFilename = false;
+		
+		// Check the args.
+		for(int i = 0 ; i < argv.length ; i++)
+		{
+			// Check for user.
+			if((argv[i].compareTo("-u") == 0) && (argv.length > (i + 1)))
 			{
-				//Init non-blocking RTPsocket that will be used to receive data
-				try{
-					//construct a new DatagramSocket to receive RTP packets from the server, on port RTP_RCV_PORT
-					RTPsocket = new DatagramSocket(RTP_RCV_PORT);
-
-					//set TimeOut value of the socket to 5msec.
-					RTPsocket.setSoTimeout(5);
-
-				}
-				catch (SocketException se)
-				{
-					System.out.println("Socket exception: "+se);
-					System.exit(0);
-				}
-
-				//init RTSP sequence number
-
-				RTSPSeqNb = 1;
-				//Send SETUP message to the server
-				send_RTSP_request("SETUP");
-
-				//Wait for the response 
-				if (parse_server_response() != 200)
-					System.out.println("Invalid Server Response");
-				else 
-				{
-					//change RTSP state and print new state 
-					state = READY;
-					System.out.println("New RTSP state: ready");
-				}
-			}//else if state != INIT then do nothing
-		}
-	}
-
-	//Handler for Play button
-	//-----------------------
-	class playButtonListener implements ActionListener {
-		public void actionPerformed(ActionEvent e){
-
-			//System.out.println("Play Button pressed !"); 
-
-			if (state == READY) 
-			{
-				//increase RTSP sequence number
-				RTSPSeqNb++;
-
-				//Send PLAY message to the server
-				send_RTSP_request("PLAY");
-
-				//Wait for the response 
-				if (parse_server_response() != 200)
-					System.out.println("Invalid Server Response");
-				else 
-				{
-					//change RTSP state and print out new state
-					state = PLAYING;
-					System.out.println("New RTSP state: playing");
-
-					//start the timer
-					timer.start();
-				}
-			}//else if state != READY then do nothing
-		}
-	}
-
-
-	//Handler for Pause button
-	//-----------------------
-	class pauseButtonListener implements ActionListener {
-		public void actionPerformed(ActionEvent e){
-
-			//System.out.println("Pause Button pressed !");   
-
-			if (state == PLAYING) 
-			{
-				//increase RTSP sequence number
-				RTSPSeqNb++;
-
-				//Send PAUSE message to the server
-				send_RTSP_request("PAUSE");
-
-				//Wait for the response 
-				if (parse_server_response() != 200)
-					System.out.println("Invalid Server Response");
-				else 
-				{
-					//change RTSP state and print out new state
-					state = READY;
-					System.out.println("New RTSP state: ready");
-
-					//stop the timer
-					timer.stop();
-				}
+				// Set user.
+				i++;
+				user = argv[i];
 			}
-			//else if state != PLAYING then do nothing
-		}
-	}
-
-	//Handler for Teardown button
-	//-----------------------
-	class tearButtonListener implements ActionListener {
-		public void actionPerformed(ActionEvent e){
-
-			//System.out.println("Teardown Button pressed !");  
-
-			//increase RTSP sequence number
-			RTSPSeqNb++;
-
-
-			//Send TEARDOWN message to the server
-			send_RTSP_request("TEARDOWN");
-
-			//Wait for the response 
-			if (parse_server_response() != 200)
-				System.out.println("Invalid Server Response");
-			else 
-			{     
-				//change RTSP state and print out new state
-				state = INIT;
-				System.out.println("New RTSP state: init");
-
-				//stop the timer
-				timer.stop();
-
-				//exit
+			// Check for server.
+			else if((argv[i].compareTo("-s") == 0) && (argv.length > (i + 1)))
+			{
+				// Set the server.
+				i++;
+				address = argv[i];
+			}
+			// Check for port.
+			else if((argv[i].compareTo("-p") == 0) && (argv.length > (i + 1)))
+			{
+				// Set the port.
+				i++;
+				port = Integer.parseInt(argv[i]);
+			}
+			// Check for group.
+			else if((argv[i].compareTo("-g") == 0) && (argv.length > (i + 1)))
+			{
+				// Set the group.
+				i++;
+				groupToJoin = argv[i];
+			}
+			// Check for file name.
+			else if((argv[i].compareTo("-v") == 0) && (argv.length > (i + 1)))
+			{
+				// Set the file name.
+				i++;
+				VideoFileName = argv[i];
+				gotFilename = true;
+			}
+			else
+			{
+				printUsage();
 				System.exit(0);
 			}
 		}
-	}
-
-
-	//------------------------------------
-	//Handler for timer
-	//------------------------------------
-
-	class timerListener implements ActionListener {
-		public void actionPerformed(ActionEvent e) {
-
-			//Construct a DatagramPacket to receive data from the UDP socket
-			rcvdp = new DatagramPacket(buf, buf.length);
-
-			try{
-				//receive the DP from the socket:
-				RTPsocket.receive(rcvdp);
-
-				//create an RTPpacket object from the DP
-				RTPpacket rtp_packet = new RTPpacket(rcvdp.getData(), rcvdp.getLength());
-
-				//print important header fields of the RTP packet received: 
-				System.out.println("Got RTP packet with SeqNum # "+rtp_packet.getsequencenumber()+" TimeStamp "+rtp_packet.gettimestamp()+" ms, of type "+rtp_packet.getpayloadtype());
-
-				//print header bitstream:
-				rtp_packet.printheader();
-
-				//get the payload bitstream from the RTPpacket object
-				int payload_length = rtp_packet.getpayload_length();
-				byte [] payload = new byte[payload_length];
-				rtp_packet.getpayload(payload);
-
-				//get an Image object from the payload bitstream
-				Toolkit toolkit = Toolkit.getDefaultToolkit();
-				Image image = toolkit.createImage(payload, 0, payload_length);
-
-				//display the image as an ImageIcon object
-				icon = new ImageIcon(image);
-				iconLabel.setIcon(icon);
-			}
-			catch (InterruptedIOException iioe){
-				//System.out.println("Nothing to read");
-			}
-			catch (IOException ioe) {
-				System.out.println("Exception caught: "+ioe);
-			}
-		}
-	}
-
-	//------------------------------------
-	//Parse Server Response
-	//------------------------------------
-	private int parse_server_response() 
-	{
-		int reply_code = 0;
-
-		try{
-			//parse status line and extract the reply_code:
-			String StatusLine = RTSPBufferedReader.readLine();
-			//System.out.println("RTSP Client - Received from Server:");
-			System.out.println(StatusLine);
-
-			StringTokenizer tokens = new StringTokenizer(StatusLine);
-			tokens.nextToken(); //skip over the RTSP version
-			reply_code = Integer.parseInt(tokens.nextToken());
-
-			//if reply code is OK get and print the 2 other lines
-			if (reply_code == 200)
-			{
-				String SeqNumLine = RTSPBufferedReader.readLine();
-				System.out.println(SeqNumLine);
-
-				String SessionLine = RTSPBufferedReader.readLine();
-				System.out.println(SessionLine);
-
-				//if state == INIT gets the Session Id from the SessionLine
-				tokens = new StringTokenizer(SessionLine);
-				tokens.nextToken(); //skip over the Session:
-				RTSPid = Integer.parseInt(tokens.nextToken());
-			}
-		}
-		catch(Exception ex)
-		{
-			System.out.println("Exception caught: "+ex);
+		
+		if(!gotFilename) {
+			System.out.println("Please supply a video file.\n\n");
+			printUsage();
 			System.exit(0);
 		}
+		
+		Receiver r = new Receiver(user + "r1", address, port, groupToJoin);
+		r.start();
 
-		return(reply_code);
+		//create a Sender object
+		Sender s = new Sender(user, address, port, groupToJoin);
+		s.video = new VideoStream(VideoFileName);
+		s.start();
+		
+		Client monitor = new Client(user + "m", address, port, groupToJoin);
+		monitor.start();
 	}
 
-	//------------------------------------
-	//Send RTSP Request
-	//------------------------------------
-
-	//.............
-	//TO COMPLETE
-	//.............
-
-	private void send_RTSP_request(String request_type)
-	{
-		try{
-			//Use the RTSPBufferedWriter to write to the RTSP socket
-
-			//write the request line:
-			RTSPBufferedWriter.write(request_type + " " + VideoFileName + " RTSP/1.0\n");
-
-			//write the CSeq line: 
-			RTSPBufferedWriter.write("Cseq: " + RTSPSeqNb + "\n");
-
-			//check if request_type is equal to "SETUP" and in this case write the Transport: line advertising to the server the port used to receive the RTP packets RTP_RCV_PORT
-			if(request_type == "SETUP") {
-				RTSPBufferedWriter.write("Transport: RTP/UDP; client_port= " + RTP_RCV_PORT + "\n");			}
-			//otherwise, write the Session line from the RTSPid field
-			else {
-				RTSPBufferedWriter.write("Session: " + RTSPid + "\n");
-			}
-
-			RTSPBufferedWriter.flush();
-		}
-		catch(Exception ex)
-		{
-			System.out.println("Exception caught: "+ex);
-			System.exit(0);
-		}
+	private static void printUsage() {
+		System.out.print("Usage: user\n" + 
+						 "\t[-u <user name>]   : unique user name\n" + 
+						 "\t[-s <address>]     : the name or IP for the daemon\n" + 
+						 "\t[-p <port>]        : the port for the daemon\n" +
+						 "\t[-g <group name>]    : the group to join\n" +
+						 "\t-v <video file name>  : the video file to multicast\n");
 	}
-
 }//end of Class Client
