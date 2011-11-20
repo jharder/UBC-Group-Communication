@@ -1,4 +1,4 @@
-/* Receiver.java
+/* ReceiverGUI.java
  *
  * Contains source from the Spread toolkit, distributed under the following licence:
  * 
@@ -35,15 +35,41 @@
    ---------------------- */
 package vchat;
 
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.GridLayout;
+import java.awt.Image;
+import java.awt.Toolkit;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
 
 import spread.SpreadConnection;
 import spread.SpreadException;
 import spread.SpreadGroup;
 import spread.SpreadMessage;
 
-public class Receiver extends Thread implements Runnable {
+public class ReceiverGUI extends Thread implements Runnable {
+	
+	//GUI:
+	//----
+	JFrame f = new JFrame("Client");
+	JButton setupButton = new JButton("Setup");
+	JButton playButton = new JButton("Play");
+	JButton pauseButton = new JButton("Pause");
+	JButton tearButton = new JButton("Teardown");
+	JPanel mainPanel = new JPanel();
+	JPanel buttonPanel = new JPanel();
+	JLabel iconLabel = new JLabel();
+	ImageIcon icon;
+	
 	private SpreadConnection connection;
 	SpreadGroup group;
 	
@@ -52,7 +78,7 @@ public class Receiver extends Thread implements Runnable {
 	//--------------------------
 	//Constructor
 	//--------------------------
-	public Receiver(String user, String address, int port, String groupToJoin) {
+	public ReceiverGUI(String user, String address, int port, String groupToJoin) {
 
 		//Establish the spread connection.
 		//--------------------------------
@@ -81,31 +107,61 @@ public class Receiver extends Thread implements Runnable {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
-
+		
+		buildGUI();
 	}
 
+	private void buildGUI() {
+		//Frame
+		f.addWindowListener(new WindowAdapter() {
+			public void windowClosing(WindowEvent e) {
+				System.exit(0);
+			}
+		});
+
+		//Buttons
+		buttonPanel.setLayout(new GridLayout(1,0));
+		buttonPanel.add(setupButton);
+		buttonPanel.add(playButton);
+		buttonPanel.add(pauseButton);
+		buttonPanel.add(tearButton);
+
+		//Image display label
+		iconLabel.setIcon(null);
+
+		//frame layout
+		mainPanel.setLayout(null);
+		mainPanel.add(iconLabel);
+		mainPanel.add(buttonPanel);
+		iconLabel.setBounds(0,0,380,280);
+		buttonPanel.setBounds(0,280,380,50);
+
+		f.getContentPane().add(mainPanel, BorderLayout.CENTER);
+		f.setSize(new Dimension(390,370));
+		f.setVisible(true);
+	}
+	
 	private void handleMessage(SpreadMessage msg)
 	{
 		try
 		{
-   	        //System.out.println("*****************RECEIVER Received Message************");
+   	        System.out.println("*****************RECEIVER Received Message************");
    	        
 			if(msg.isRegular())	{
-				//printMsg(msg, "Regular", false);
+				printMsg(msg, "Regular", false);
 				
 				byte data[] = msg.getData();
-        ByteArrayInputStream byteStream = new ByteArrayInputStream;
-        ObjectInputStream objectStream = new ObjectInputStream;
-        VideoMsg msgData = (VideoMsg)objectStream.readObject();
 
-//			int seqnum = 0;
-//			for(int i = 0; i < 4; i++) {
-//				seqnum += data[data.length - 4 + i] << ((3 - i) * 8); 
-//			}
-//			System.out.println("Seq # " + seqnum);
-//		} else {
-//			// Discard the message and let the Client object take care of it
-//		}
+				//get an Image object from the buffer
+				Toolkit toolkit = Toolkit.getDefaultToolkit();
+				Image image = toolkit.createImage(data, 0, data.length);
+
+				//display the image as an ImageIcon object
+				icon = new ImageIcon(image);
+				iconLabel.setIcon(icon);
+			} else {
+				// Discard the message and let the Client object take care of it
+			}
 		}
 		catch(Exception e)
 		{
@@ -171,4 +227,3 @@ public class Receiver extends Thread implements Runnable {
 		}
 	}
 }//end of Class Receiver
-/* Receiver.java

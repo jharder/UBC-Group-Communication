@@ -1,11 +1,5 @@
 package vchat;
-/*Server.java*/
-
-/* ------------------
-   Server
-   usage: java Server [RTSP listening port]
-   ---------------------- */
-
+/*Sender.java*/
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -21,6 +15,7 @@ public class Sender extends Thread implements Runnable {
 	static int FRAME_PERIOD = 100; //Frame period of the video to stream, in ms
 	byte[] buf; //buffer used to store the images to send to the client 
 	static String VideoFileName; //video file requested from the client
+	int seqnum;
 
 	//Spread variables:
 	//-----------------
@@ -53,7 +48,9 @@ public class Sender extends Thread implements Runnable {
 		}
 
 		//allocate memory for the sending buffer
-		buf = new byte[15000]; 
+		buf = new byte[15000];
+		
+		seqnum = 0;
 	}
 
 	//--------------------------------
@@ -62,15 +59,31 @@ public class Sender extends Thread implements Runnable {
 	private void sendFrame() {
 		try {
 			SpreadMessage msg = new SpreadMessage();
+			msg.setUnreliable();
 			msg.addGroup(group);
 			
 			//get next frame to send from the video
+			seqnum ++;
 			video.getNextFrame(buf);
+			
+//		// Append sequence number
+//		byte[] bFramenum = new byte[4];
+//		for(int o = 0; o < 4; o++) {
+//			bFramenum[o] = (byte) (seqnum >>> 8 * (3 - o));
+//			int bufIndex = buf.length - 4 + o;
+//			buf[bufIndex] = bFramenum[o];
+//		}
 
-			msg.setData(buf);
+      msgData = new VideoMsg(buf, seqnum);
+      ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+      ObjectOutputStream objectStream = new ObjectOutputStream(byteStream);
+      objectStream.writeObject(msgData);
+      objectStream.close();
+      byte[] sendData = byteStream.toByteArray();
+			msg.setData(sendData);
 			
 			// Send the message.
-			////////////////////
+			System.out.println("Sending frame " + seqnum);
 			connection.multicast(msg);
 		}
 		catch(Exception ex)
