@@ -8,6 +8,9 @@ import spread.SpreadConnection;
 import spread.SpreadException;
 import spread.SpreadMessage;
 
+import java.io.ObjectOutputStream;
+import java.io.ByteArrayOutputStream;
+
 public class Sender extends Thread implements Runnable {
 	//Video variables:
 	//----------------
@@ -66,15 +69,7 @@ public class Sender extends Thread implements Runnable {
 			seqnum ++;
 			video.getNextFrame(buf);
 			
-//		// Append sequence number
-//		byte[] bFramenum = new byte[4];
-//		for(int o = 0; o < 4; o++) {
-//			bFramenum[o] = (byte) (seqnum >>> 8 * (3 - o));
-//			int bufIndex = buf.length - 4 + o;
-//			buf[bufIndex] = bFramenum[o];
-//		}
-
-      msgData = new VideoMsg(buf, seqnum);
+      VideoMsg msgData = new VideoMsg(buf, seqnum);
       ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
       ObjectOutputStream objectStream = new ObjectOutputStream(byteStream);
       objectStream.writeObject(msgData);

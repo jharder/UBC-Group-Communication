@@ -43,6 +43,9 @@ import spread.SpreadException;
 import spread.SpreadGroup;
 import spread.SpreadMessage;
 
+import java.io.ObjectInputStream;
+import java.io.ByteArrayInputStream;
+
 public class Receiver extends Thread implements Runnable {
 	private SpreadConnection connection;
 	SpreadGroup group;
@@ -89,23 +92,18 @@ public class Receiver extends Thread implements Runnable {
 		try
 		{
    	        //System.out.println("*****************RECEIVER Received Message************");
-   	        
 			if(msg.isRegular())	{
 				//printMsg(msg, "Regular", false);
 				
 				byte data[] = msg.getData();
-        ByteArrayInputStream byteStream = new ByteArrayInputStream;
-        ObjectInputStream objectStream = new ObjectInputStream;
+        ByteArrayInputStream byteStream = new ByteArrayInputStream(data);
+        ObjectInputStream objectStream = new ObjectInputStream(byteStream);
         VideoMsg msgData = (VideoMsg)objectStream.readObject();
-
-//			int seqnum = 0;
-//			for(int i = 0; i < 4; i++) {
-//				seqnum += data[data.length - 4 + i] << ((3 - i) * 8); 
-//			}
-//			System.out.println("Seq # " + seqnum);
-//		} else {
-//			// Discard the message and let the Client object take care of it
-//		}
+        System.out.println("Received frame " + msgData.seqnum);
+        objectStream.close();
+      } else {
+        // Discard the message and let the Client object take care of it
+      }
 		}
 		catch(Exception e)
 		{
@@ -171,4 +169,3 @@ public class Receiver extends Thread implements Runnable {
 		}
 	}
 }//end of Class Receiver
-/* Receiver.java
