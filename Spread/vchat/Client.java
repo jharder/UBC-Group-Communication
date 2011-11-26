@@ -85,17 +85,17 @@ public class Client extends Thread implements Runnable {
         // Create a new Receiver object for this new peer if we don't already
         // have one and it is not ourself or one of the Receivers we have
         // already created.
-        String pName = info.getJoined().toString();
-        String rName = name + "_r_" + numRcvrs;
-        if (!pName.equals(connection.getPrivateGroup().toString())
-            && !peers.containsKey(pName) && !rcvrs.contains(rName)) {
-          Receiver newrcvr = new Receiver(rName, dAddr,
-              dPort, groupName, logFile);
-          peers.put(pName, newrcvr);
-          rcvrs.add(rName);
-          newrcvr.start();
-          numRcvrs++;
-        }
+//        String pName = info.getJoined().toString();
+//        String rName = name + "_r_" + numRcvrs;
+//        if (!pName.equals(connection.getPrivateGroup().toString())
+//            && !peers.containsKey(pName) && !rcvrs.contains(rName)) {
+//          Receiver newrcvr = new Receiver(rName, dAddr,
+//              dPort, groupName, logFile);
+//          peers.put(pName, newrcvr);
+//          rcvrs.add(rName);
+//          newrcvr.start();
+//          numRcvrs++;
+//        }
       } else if (info.isCausedByLeave()) {
         System.out.println("the LEAVE of " + info.getLeft());
 
@@ -149,20 +149,20 @@ public class Client extends Thread implements Runnable {
   private void handleMessage(SpreadMessage msg) {
     try {
       if (msg.isRegular()) {
-        // Create a new Receiver object for this new peer.
-        String pName = msg.getSender().toString();
-        String rName = name + "_r_" + numRcvrs;
-        if (!peers.containsKey(pName) && !rcvrs.contains(rName)) {
-          Receiver newrcvr = new Receiver(rName, dAddr, dPort, groupName,
-              logFile);
-          peers.put(pName, newrcvr);
-          rcvrs.add(rName);
-          newrcvr.start();
-          numRcvrs++;
-        } else {
-          // Discard the message and let the Receiver object take care of
-          // it
-        }
+//        // Create a new Receiver object for this new peer.
+//        String pName = msg.getSender().toString();
+//        String rName = name + "_r_" + numRcvrs;
+//        if (!peers.containsKey(pName) && !rcvrs.contains(rName)) {
+//          Receiver newrcvr = new Receiver(rName, dAddr, dPort, groupName,
+//              logFile);
+//          peers.put(pName, newrcvr);
+//          rcvrs.add(rName);
+//          newrcvr.start();
+//          numRcvrs++;
+//        } else {
+//          // Discard the message and let the Receiver object take care of
+//          // it
+//        }
       } else if (msg.isMembership()) {
         System.out
             .println("*****************CLIENT Received Message************");
@@ -237,10 +237,10 @@ public class Client extends Thread implements Runnable {
   // ------------------------------------
   public static void main(String argv[]) throws Exception {
     // Set default values.
-    String user = new String("user");
+    String userName = new String("u1");
     String address = null;
     int port = 0;
-    String groupToJoin = new String("Group");
+    ArrayList<String> groupsToJoin = new ArrayList<String>();
     String lFile = "vchat_log";
     boolean isSender = false;
 
@@ -248,29 +248,29 @@ public class Client extends Thread implements Runnable {
 
     // Check the args.
     for (int i = 0; i < argv.length; i++) {
-      // Check for user.
+      // Check for user name.
       if ((argv[i].compareTo("-u") == 0) && (argv.length > (i + 1))) {
-        // Set user.
+        // Set user name.
         i++;
-        user = argv[i];
+        userName = argv[i];
       }
       // Check for server.
-      else if ((argv[i].compareTo("-s") == 0) && (argv.length > (i + 1))) {
+      else if ((argv[i].compareTo("-da") == 0) && (argv.length > (i + 1))) {
         // Set the server.
         i++;
         address = argv[i];
       }
       // Check for port.
-      else if ((argv[i].compareTo("-p") == 0) && (argv.length > (i + 1))) {
+      else if ((argv[i].compareTo("-dp") == 0) && (argv.length > (i + 1))) {
         // Set the port.
         i++;
         port = Integer.parseInt(argv[i]);
       }
       // Check for group.
-      else if ((argv[i].compareTo("-g") == 0) && (argv.length > (i + 1))) {
+      else if ((argv[i].compareTo("-r") == 0) && (argv.length > (i + 1))) {
         // Set the group.
         i++;
-        groupToJoin = argv[i];
+        groupsToJoin.add(argv[i]);
       }
       // Check for log file name.
       else if ((argv[i].compareTo("-l") == 0) && (argv.length > (i + 1))) {
@@ -279,7 +279,7 @@ public class Client extends Thread implements Runnable {
         lFile = argv[i];
       }
       // Check for video file name.
-      else if ((argv[i].compareTo("-v") == 0) && (argv.length > (i + 1))) {
+      else if ((argv[i].compareTo("-s") == 0) && (argv.length > (i + 1))) {
         // Set the file name.
         i++;
         VideoFileName = argv[i];
@@ -292,14 +292,22 @@ public class Client extends Thread implements Runnable {
 
     if (gotVideo) {
       // create a Sender object
-      Sender s = new Sender(user + "_s", address, port, groupToJoin);
+      Sender s = new Sender(userName, address, port);
       s.video = new VideoStream(VideoFileName);
       s.start();
-    } else {
-      Client monitor = new Client(user + "_m", address, port, groupToJoin,
-          lFile);
-      monitor.start();
     }
+    if (!groupsToJoin.isEmpty()) {
+      for(String g : groupsToJoin) {
+        // Create a Receiver object.
+        String rName = userName + "_R" + g;
+        Receiver newrcvr = new Receiver(rName, address, port, g, lFile);
+        newrcvr.start();
+        numRcvrs++;
+      }  
+    }
+//      Client monitor = new Client(userName + "_m", address, port, groupToJoin,
+//          lFile);
+//      monitor.start();
   }
 
   // TODO: Update this

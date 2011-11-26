@@ -23,20 +23,20 @@ public class Sender extends Thread implements Runnable {
 
   // Spread variables:
   // -----------------
-  private String group;
+  private String name;
   private SpreadConnection connection;
 
   // --------------------------------
   // Constructor
   // --------------------------------
-  public Sender(String user, String address, int port, String groupToJoin) {
-    group = groupToJoin;
+  public Sender(String userName, String address, int port) {
+    name = userName;
 
     // Establish the spread connection.
     // --------------------------------
     try {
       connection = new SpreadConnection();
-      connection.connect(InetAddress.getByName(address), port, user, false,
+      connection.connect(InetAddress.getByName(address), port, userName, false,
           true);
     } catch (SpreadException e) {
       System.err.println("There was an error connecting to the daemon.");
@@ -60,7 +60,7 @@ public class Sender extends Thread implements Runnable {
     try {
       SpreadMessage msg = new SpreadMessage();
       msg.setUnreliable();
-      msg.addGroup(group);
+      msg.addGroup(name);
 
       // get next frame to send from the video
       seqnum++;
