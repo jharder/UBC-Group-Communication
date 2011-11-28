@@ -37,36 +37,47 @@ package vchat;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.zip.CRC32;
 
 import spread.SpreadConnection;
 import spread.SpreadException;
 import spread.SpreadGroup;
 import spread.SpreadMessage;
 
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ByteArrayInputStream;
 
 public class Receiver extends Thread implements Runnable {
-  private SpreadConnection connection;
-  SpreadGroup group;
-
-  String logFile;
   public boolean threadSuspended;
 
-  // --------------------------
-  // Constructor
-  // --------------------------
+  // Spread
+  private SpreadConnection connection;
+  SpreadGroup group;        // Name of the group to join (sender we want to listen to)
+
+  // Logging
+  FileOutputStream lStream; // File stream for logging to a file 
+  int numMsgs = 0;          // Tally of number of messages recieved
+  int lastSeq = 0;
+
+  /*
+   * Constructor
+   */
   public Receiver(String user, String address, int port, String groupToJoin,
       String lFile) {
-    logFile = lFile;
+    // Prepare for logging
+    try {
+      lStream = new FileOutputStream(lFile, true);
+    } catch (FileNotFoundException e2) {
+      e2.printStackTrace();
+    }
+    
     // Establish the spread connection.
-    // --------------------------------
     try {
       connection = new SpreadConnection();
       connection.connect(InetAddress.getByName(address), port, user, false,
           true);
-
     } catch (SpreadException e) {
       System.err.println("There was an error connecting to the daemon.");
       e.printStackTrace();
@@ -76,31 +87,52 @@ public class Receiver extends Thread implements Runnable {
       System.exit(1);
     }
 
+    // Join the group to which the intended sender is multicasting. 
     group = new SpreadGroup();
     try {
       group.join(connection, groupToJoin);
     } catch (SpreadException e1) {
-      // TODO Auto-generated catch block
       e1.printStackTrace();
     }
-
   }
 
+  /*
+   * Handles regular (non-membership) messages.
+   */
   private void handleMessage(SpreadMessage msg) {
     try {
-      // System.out.println("*****************RECEIVER Received Message************");
       if (msg.isRegular()) {
-        // printMsg(msg, "Regular", false);
-
+//        printMsg(msg, "Regular", false);
+        
+        // Extract data from the message.
         byte data[] = msg.getData();
         ByteArrayInputStream byteStream = new ByteArrayInputStream(data);
         ObjectInputStream objectStream = new ObjectInputStream(byteStream);
         VideoMsg msgData = (VideoMsg) objectStream.readObject();
-        System.out.println("Received frame " + msgData.seqnum);
-        FileOutputStream fStream = new FileOutputStream(logFile, true);
         objectStream.close();
-      } else {
-        // Discard the message and let the Client object take care of it
+
+        // Log receipt of the message.
+        numMsgs ++;
+        int seq = msgData.seqnum;
+        String logMsg = "Received frame " + seq + " from " + msg.getSender() +  "\n";
+        lStream.write(logMsg.getBytes());
+        System.out.print(logMsg);
+        
+        // Check for and log an out-of-order message. 
+        if(lastSeq > seq) {
+          logMsg = "***OUT-OF-ORDER***\n" +
+                   "   Message # " + seq + " came after " + lastSeq + "\n";
+        }
+        lStream.write(logMsg.getBytes());
+        System.out.println(logMsg);
+        
+        // Check for and log message corruption.
+        CRC32 checksum = new CRC32();
+        checksum.update(data);
+        if (checksum.getValue() != msgData.checksum) {
+          logMsg = "***CORRUPT***\n" + 
+                   "   Message # " + seq + " is not the same as when it was sent.\n";
+        }
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -109,7 +141,6 @@ public class Receiver extends Thread implements Runnable {
   }
 
   private void printMsg(SpreadMessage msg, String msgType, boolean printData) {
-    // Received a Reject message
     System.out.print("Received a ");
     if (msg.isUnreliable())
       System.out.print("UNRELIABLE");
@@ -152,11 +183,12 @@ public class Receiver extends Thread implements Runnable {
 
         if (threadSuspended) {
           synchronized (this) {
-            while (threadSuspended) {
-              // wait();
-              group.leave();
-              System.exit(0);
-            }
+            group.leave();
+            String logMsg = "\n+++END OF TEST+++\n" +
+                            "Received a total of " + numMsgs + " messages.\n";
+            lStream.write(logMsg.getBytes());
+            lStream.close();
+            System.exit(0);
           }
         }
       } catch (Exception e) {
@@ -164,4 +196,4 @@ public class Receiver extends Thread implements Runnable {
       }
     }
   }
-}// end of Class Receiver
+}

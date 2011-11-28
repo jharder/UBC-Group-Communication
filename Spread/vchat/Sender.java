@@ -1,7 +1,5 @@
 package vchat;
 
-/*Sender.java*/
-
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
@@ -9,31 +7,46 @@ import spread.SpreadConnection;
 import spread.SpreadException;
 import spread.SpreadMessage;
 
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.ByteArrayOutputStream;
 
 public class Sender extends Thread implements Runnable {
-  // Video variables:
-  // ----------------
-  VideoStream video; // VideoStream object used to access video frames
+  public boolean threadSuspended;
+  
+  // Video
+  VideoStream video;             // VideoStream object used to access video frames
   static int FRAME_PERIOD = 100; // Frame period of the video to stream, in ms
-  byte[] buf; // buffer used to store the images to send to the client
-  static String VideoFileName; // video file requested from the client
-  int seqnum;
+  byte[] buf;                    // Buffer used to store the images to send to the client
+  static String VideoFileName;   // Video file requested from the client
 
-  // Spread variables:
-  // -----------------
-  private String name;
+  // Spread
+  private String name;           // The name of the group to which we will multicast
   private SpreadConnection connection;
 
-  // --------------------------------
-  // Constructor
-  // --------------------------------
-  public Sender(String userName, String address, int port) {
+  // Logging
+  FileOutputStream fStream;      // File stream for logging to a file
+  int seqnum;                    // Sequence number to append to next message
+
+  /*
+   * Constructor
+   */
+  public Sender(String userName, String address, int port, String lFile) {
     name = userName;
+    seqnum = 0;
+
+    try {
+      fStream = new FileOutputStream(lFile, true);
+    } catch (FileNotFoundException e1) {
+      e1.printStackTrace();
+    }
+
+    // Allocate memory for the sending buffer
+    buf = new byte[15000];
 
     // Establish the spread connection.
-    // --------------------------------
     try {
       connection = new SpreadConnection();
       connection.connect(InetAddress.getByName(address), port, userName, false,
@@ -46,55 +59,67 @@ public class Sender extends Thread implements Runnable {
       System.err.println("Can't find the daemon " + address);
       System.exit(1);
     }
-
-    // allocate memory for the sending buffer
-    buf = new byte[15000];
-
-    seqnum = 0;
   }
 
-  // --------------------------------
-  // Sends a frame
-  // --------------------------------
+  /*
+   * Sends a frame
+   */
   private void sendFrame() {
     try {
-      SpreadMessage msg = new SpreadMessage();
-      msg.setUnreliable();
-      msg.addGroup(name);
-
-      // get next frame to send from the video
+      // Get next frame to send from the video.
       seqnum++;
       video.getNextFrame(buf);
-
+      
+      // Wrap it in a serialized object.
       VideoMsg msgData = new VideoMsg(buf, seqnum);
       ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
       ObjectOutputStream objectStream = new ObjectOutputStream(byteStream);
       objectStream.writeObject(msgData);
       objectStream.close();
       byte[] sendData = byteStream.toByteArray();
+
+      // Insert the serialized object into a Spread message.
+      SpreadMessage msg = new SpreadMessage();
+      msg.setUnreliable();
+      msg.addGroup(name);
       msg.setData(sendData);
 
-      // Send the message.
-      System.out.println("Sending frame " + seqnum);
+      // Send the message and log it.
+      String logMsg = "Sending frame " + seqnum + "\n";
+      System.out.println(logMsg);
+      fStream.write(logMsg.getBytes());
       connection.multicast(msg);
     } catch (Exception ex) {
       System.out.println("Exception caught: " + ex);
       System.exit(0);
     }
   }
+  
+  public String getGroupName() {
+    return name;
+  }
 
-  // ------------------------------------
-  // main
-  // ------------------------------------
   public void run() {
     while (true) {
       sendFrame();
       try {
         Thread.sleep(FRAME_PERIOD);
       } catch (InterruptedException e) {
-        // TODO Auto-generated catch block
         e.printStackTrace();
         System.exit(1);
+      }
+      if (threadSuspended) {
+        synchronized (this) {
+          String logMsg = "\n+++END OF TEST+++\n" +
+                          "Sent a total of " + seqnum + " messages.\n";
+          try {
+            fStream.write(logMsg.getBytes());
+            fStream.close();
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
+          System.exit(0);
+        }
       }
     }
   }

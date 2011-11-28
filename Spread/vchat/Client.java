@@ -1,37 +1,43 @@
 package vchat;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Set;
 
 import spread.MembershipInfo;
 import spread.SpreadConnection;
 import spread.SpreadException;
 import spread.SpreadGroup;
 import spread.SpreadMessage;
+import sun.awt.PeerEvent;
 
 public class Client extends Thread implements Runnable {
   static String VideoFileName; // video file requested from the client
   private String logFile;
   private String name; // Spread private group name (user name)
   private static int numRcvrs = 0;
-  private String groupName;
+  private ArrayList<String> groups;
   private String dAddr;
   private int dPort;
   private SpreadConnection connection;
   private SpreadGroup group;
-  private HashMap<String, Receiver> peers;
-  private ArrayList<String> rcvrs;
+  protected HashMap<String, Receiver> receivers;
+//  private ArrayList<Receiver> rcvrs;
+  private static Sender s;
 
-  public Client(String user, String address, int port, String groupToJoin,
+  public Client(String user, String address, int port, ArrayList<String> g,
       String lFile) {
     name = user;
-    groupName = groupToJoin;
+    groups = g;
     dAddr = address;
     dPort = port;
-    peers = new HashMap<String, Receiver>();
-    rcvrs = new ArrayList<String>();
+    receivers = new HashMap<String, Receiver>();
     logFile = lFile;
 
     // Establish the spread connection.
@@ -49,12 +55,13 @@ public class Client extends Thread implements Runnable {
       System.exit(1);
     }
 
-    group = new SpreadGroup();
-    try {
-      group.join(connection, groupToJoin);
-    } catch (SpreadException e1) {
-      // TODO Auto-generated catch block
-      e1.printStackTrace();
+    for(String gName : groups) {
+      group = new SpreadGroup();
+      try {
+        group.join(connection, gName);
+      } catch (SpreadException e1) {
+        e1.printStackTrace();
+      }
     }
   }
 
@@ -81,46 +88,20 @@ public class Client extends Thread implements Runnable {
       System.out.print("\tDue to ");
       if (info.isCausedByJoin()) {
         System.out.println("the JOIN of " + info.getJoined());
-
-        // Create a new Receiver object for this new peer if we don't already
-        // have one and it is not ourself or one of the Receivers we have
-        // already created.
-//        String pName = info.getJoined().toString();
-//        String rName = name + "_r_" + numRcvrs;
-//        if (!pName.equals(connection.getPrivateGroup().toString())
-//            && !peers.containsKey(pName) && !rcvrs.contains(rName)) {
-//          Receiver newrcvr = new Receiver(rName, dAddr,
-//              dPort, groupName, logFile);
-//          peers.put(pName, newrcvr);
-//          rcvrs.add(rName);
-//          newrcvr.start();
-//          numRcvrs++;
-//        }
       } else if (info.isCausedByLeave()) {
         System.out.println("the LEAVE of " + info.getLeft());
-
-        // Tear down the receiver we had for the peer that has left.
-        Receiver r = peers.get(info.getLeft().toString());
-        // TODO: Is this right? Got it from the User example.
-        if (r.threadSuspended) {
-          synchronized (r) {
-            r.notify();
-            r.threadSuspended = false;
-          }
-        }
-        peers.remove(info.getLeft().toString());
       } else if (info.isCausedByDisconnect()) {
         System.out.println("the DISCONNECT of " + info.getDisconnected());
 
         // Tear down the receiver we had for the peer that has left.
-        Receiver r = (Receiver) peers.get(info.getLeft().toString());
+        Receiver r = (Receiver) receivers.get(info.getLeft().toString());
         if (r.threadSuspended) {
           synchronized (r) {
             r.notify();
             r.threadSuspended = false;
           }
         }
-        peers.remove(info.getLeft().toString());
+        receivers.remove(info.getLeft().toString());
       } else if (info.isCausedByNetwork()) {
         System.out.println("NETWORK change");
         for (int i = 0; i < virtual_synchrony_sets.length; ++i) {
@@ -172,7 +153,7 @@ public class Client extends Thread implements Runnable {
         // Received a Reject message
         System.out
             .println("*****************CLIENT Received Message************");
-        printMsg(msg, "Reject");
+        printMsg(msg, "Reject", false);
       } else {
         System.out.println("Message is of unknown type: "
             + msg.getServiceType());
@@ -183,7 +164,7 @@ public class Client extends Thread implements Runnable {
     }
   }
 
-  private void printMsg(SpreadMessage msg, String msgType) {
+  private void printMsg(SpreadMessage msg, String msgType, boolean printData) {
     System.out.print("Received a ");
     if (msg.isUnreliable())
       System.out.print("UNRELIABLE");
@@ -214,19 +195,52 @@ public class Client extends Thread implements Runnable {
     byte data[] = msg.getData();
     System.out.println("The data is " + data.length + " bytes.");
 
-    System.out.println("The message is: " + new String(data));
+    if (printData) {
+      System.out.println("The message is: " + new String(data));
+    }
   }
 
   /*
    * Monitors for users joining or leaving, and creates and tears down receiver
    * threads accordingly
    */
-  public void run() {
+  public void run(){
+    BufferedReader inRdr = new BufferedReader(new InputStreamReader(System.in));
     while (true) {
       try {
+        if (inRdr.ready()) {
+          if ((char)inRdr.read() == 's') {
+            // User wants to stop a receiver.
+            
+            // Print menu.
+//            boolean gotChoice = false;
+//            Integer choice = Integer.getInteger(inRdr.readLine());
+//            while(!gotChoice) {
+//              System.out.println("Receiver threads running:");
+//              int i = 0;
+//              for(String rName : receivers.keySet()) {
+//                i++;
+//                System.out.println(i + ". " + rName);
+//              }
+//              System.out.println("Stop which thread? (0 to cancel)");
+//              
+//              // Get response.
+//              if (choice == null || choice < 0 || choice > i) {
+//                System.out.println("Enter a number.");
+//              } else {
+//                gotChoice = true;
+//              }
+//            }
+            
+            // Stop all receivers.
+            for(Receiver r : receivers.values()) {
+              r.threadSuspended = true;
+            }
+          }
+        }
         handleMessage(connection.receive());
       } catch (Exception e) {
-
+        e.printStackTrace();
       }
 
     }
@@ -241,8 +255,7 @@ public class Client extends Thread implements Runnable {
     String address = null;
     int port = 0;
     ArrayList<String> groupsToJoin = new ArrayList<String>();
-    String lFile = "vchat_log";
-    boolean isSender = false;
+    String lFileBase = "vchat_log";
 
     boolean gotVideo = false;
 
@@ -266,7 +279,7 @@ public class Client extends Thread implements Runnable {
         i++;
         port = Integer.parseInt(argv[i]);
       }
-      // Check for group.
+      // Check for group to join.
       else if ((argv[i].compareTo("-r") == 0) && (argv.length > (i + 1))) {
         // Set the group.
         i++;
@@ -276,7 +289,7 @@ public class Client extends Thread implements Runnable {
       else if ((argv[i].compareTo("-l") == 0) && (argv.length > (i + 1))) {
         // Set the log file.
         i++;
-        lFile = argv[i];
+        lFileBase = argv[i];
       }
       // Check for video file name.
       else if ((argv[i].compareTo("-s") == 0) && (argv.length > (i + 1))) {
@@ -290,9 +303,13 @@ public class Client extends Thread implements Runnable {
       }
     }
 
+    Client monitor = new Client(userName + "_m", address, port, groupsToJoin,
+        lFileBase);
+    monitor.start();
+
     if (gotVideo) {
-      // create a Sender object
-      Sender s = new Sender(userName, address, port);
+      // Create a Sender object.
+      s = new Sender(userName, address, port, lFileBase + "_s");
       s.video = new VideoStream(VideoFileName);
       s.start();
     }
@@ -300,14 +317,12 @@ public class Client extends Thread implements Runnable {
       for(String g : groupsToJoin) {
         // Create a Receiver object.
         String rName = userName + "_R" + g;
-        Receiver newrcvr = new Receiver(rName, address, port, g, lFile);
-        newrcvr.start();
+        Receiver r = new Receiver(rName, address, port, g, lFileBase + "_r");
+        monitor.receivers.put(rName, r);
+        r.start();
         numRcvrs++;
       }  
     }
-//      Client monitor = new Client(userName + "_m", address, port, groupToJoin,
-//          lFile);
-//      monitor.start();
   }
 
   // TODO: Update this
@@ -319,4 +334,4 @@ public class Client extends Thread implements Runnable {
         + "\t[-g <group name>]    : the group to join\n"
         + "\t-v <video file name>  : the video file to multicast\n");
   }
-}// end of Class Client
+}
