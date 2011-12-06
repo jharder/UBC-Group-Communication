@@ -1,0 +1,35 @@
+The library I'm working with for this project is JGroups (a multicast/pub-sub library written in and for Java).
+
+
+
+What I've completed so far:
+
+- Downloaded and installed JGroups. This was actually a relatively easy process, which will be very convenient when it comes to testing across multiple machines later.
+
+- Did some amount of checking up on JGroups (how it works, what it's used for, etc) on their official website.
+
+- Written a preliminary program (resembling a primitive peer-to-peer chat environment) to see whether I could make JGroups work the way it says in the tutorial on their official website.
+
+- Tested the chat program on a single machine and across two machines on my LAN at home. The machines were running different versions of Windows and had different IPv6 capabilities. Nevertheless I was able to make both tests work under the default UDP emulator with forced IPv4 usage. The default TCP emulator seems to be more of a problem, I haven't gotten it to work yet.
+
+- Written a more advanced program for multiway video streaming. This is something we planned for each team member to do, based partly on shared code, in order to have a more or less standardized platform (and one with substantial performance requirements) for testing each library. Although the original goal was to implement one-to-one streaming first and then bring it up to many-to-many, I went straight to a many-to-many implementation because it was hardly any extra work. In fact it may very well have been easier than the one-to-one scenario, due to the way JGroups is set up and the code from my previous test.
+
+- Tested the video streaming program on a single machine and across two machines (the same as above). This did not go as well as the chat test, at first the stream was incredibly jerky and would not transmit from one machine to another. By slowing the video down I was able to make it more consistent and the two machines were then able to communicate with each other as intended. I don't know how much this is due to my code and how much is due to my amateur handling of JGroups.
+
+
+
+Note that I have not included group project discussion and brainstorming as 'activities' here, since it's too hard to quantify. I have been present and participating in group meetings though.
+
+I would say in terms of the amount of stuff we're intending to do, the project is about 35% complete.
+
+
+
+What I intend to do next:
+
+- Find the problem that's making the video stream work badly and fix it. I know JGroups is capable of doing this properly, and I'll need the speed for later tests.
+
+- Educate myself on JGroups's many options and parameters. This will likely go hand-in-hand with making the video stream work well (depending on what exactly the problem is with that), and will also be necessary on its own for doing performance and reliability testing.
+
+
+
+Much of this information can be seen in a similar form (with some dates) on the Fossil wiki.
