@@ -1,13 +1,13 @@
 package yami;
-/*VideoStream.java*/
 
-import java.io.*;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 
 public class VideoStream {
 
 	FileInputStream fis; //video file
-	int frame_nb; //current frame nb
 	String filename;
+	int frameNum = 0;
 
 	//-----------------------------------
 	//constructor
@@ -18,7 +18,7 @@ public class VideoStream {
 	}
 
 	//-----------------------------------
-	// getnextframe
+	// getNextFrame
 	//returns the next frame as an array of byte and the size of the frame
 	//-----------------------------------
 	public int getNextFrame(byte[] frame) throws Exception {
@@ -27,6 +27,7 @@ public class VideoStream {
 		byte[] frame_length = new byte[5];
 		
 		if (fis.available() <= 0) {
+			frameNum = 0;
 			fis.close();
 			Initialize(filename);
 		}
@@ -37,8 +38,10 @@ public class VideoStream {
 		//transform frame_length to integer
 		length_string = new String(frame_length);
 		length = Integer.parseInt(length_string);
-
-		return fis.read(frame, 0, length);
+		fis.read(frame, 0, length);
+		frameNum++;
+		
+		return frameNum; 
 	}
 	
 	private void Initialize(String filename) throws FileNotFoundException {
