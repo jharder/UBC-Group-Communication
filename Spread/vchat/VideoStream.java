@@ -28,7 +28,9 @@ public class VideoStream {
 		
 		if (fis.available() <= 0) {
 			fis.close();
-			initialize(filename);
+			return -1;
+			// Restart video
+//			initialize(filename);
 		}
 
 		//read current frame length

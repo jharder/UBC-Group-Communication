@@ -44,32 +44,47 @@ import spread.SpreadException;
 import spread.SpreadGroup;
 import spread.SpreadMessage;
 
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ByteArrayInputStream;
 
 public class Receiver extends Thread implements Runnable {
+  private static int numThrashers = 0;
+
   public boolean threadSuspended;
 
   // Spread
   private SpreadConnection connection;
   SpreadGroup group;        // Name of the group to join (sender we want to listen to)
 
+  // Testing
+  boolean thrash;           // If true, leave and join the group regularly 
+  int thrashID;             // Identifies the instance for timing
+  
   // Logging
   FileOutputStream lStream; // File stream for logging to a file 
-  int numMsgs = 0;          // Tally of number of messages recieved
-  int lastSeq = 0;
+  long numMsgs = 0;          // Tally of number of messages received
+  int lastSeq  = 0;
+  int bytesIn  = 0;          // Tally of number of bytes received
+  long tStart  = -1;         // Time of first message received
 
   /*
    * Constructor
    */
   public Receiver(String user, String address, int port, String groupToJoin,
-      String lFile) {
+      String lFile, boolean tMode) {
+    thrash = tMode;
+    if (tMode) {
+      thrashID = numThrashers++;
+    }
+    
     // Prepare for logging
     try {
-      lStream = new FileOutputStream(lFile, true);
-    } catch (FileNotFoundException e2) {
+      lStream = new FileOutputStream(lFile, false);
+      String logMsg = "*****************************************************\n"
+                    + "+++ RECEIVER INSTANTIATED +++\n";
+      Util.log(lStream, logMsg);
+    } catch (Exception e2) {
       e2.printStackTrace();
     }
     
@@ -97,103 +112,139 @@ public class Receiver extends Thread implements Runnable {
   }
 
   /*
+   * Sends a pong.
+   */
+  private void sendPong(SpreadGroup sender) {
+      SpreadMessage msg = new SpreadMessage();
+      msg.setUnreliable();
+      msg.addGroup(sender);
+
+      // Send the message and log it.
+      Util.log(lStream, "Sending pong.\n");
+      try {
+        connection.multicast(msg);
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+  }
+
+  /*
    * Handles regular (non-membership) messages.
    */
-  private void handleMessage(SpreadMessage msg) {
+  private int handleMessage(SpreadMessage msg) {
     try {
       if (msg.isRegular()) {
-//        printMsg(msg, "Regular", false);
-        
+//        Util.printMsg(msg, "Regular", false);
         // Extract data from the message.
-        byte data[] = msg.getData();
-        ByteArrayInputStream byteStream = new ByteArrayInputStream(data);
+        byte spreadPayload[] = msg.getData();
+        ByteArrayInputStream byteStream = new ByteArrayInputStream(spreadPayload);
         ObjectInputStream objectStream = new ObjectInputStream(byteStream);
-        VideoMsg msgData = (VideoMsg) objectStream.readObject();
+        VideoMsg vMsg = (VideoMsg) objectStream.readObject();
         objectStream.close();
-
-        // Log receipt of the message.
+        
+        // Check for a ping.
+        if (vMsg.type == Util.PING_MSG) {
+          if (!thrash) {
+            // Respond only if we are not riff-raff.
+            sendPong(msg.getSender());
+          }
+          return Util.PING_MSG;
+        }
+        if (vMsg.type == Util.TERM_MSG) {
+          return Util.TERM_MSG;
+        }
+        
+        // If we got here, it must be a video frame. Log receipt of the message.
+        if (tStart < 0) {
+          tStart = System.nanoTime();
+        }
         numMsgs ++;
-        int seq = msgData.seqnum;
-        String logMsg = "Received frame " + seq + " from " + msg.getSender() +  "\n";
-        lStream.write(logMsg.getBytes());
-        System.out.print(logMsg);
+        bytesIn += spreadPayload.length;
+        int seq = vMsg.seqnum;
+        Util.log(lStream, "Received frame from " + msg.getSender() + " seq. # " + seq + " size " + spreadPayload.length + "\n");
         
         // Check for and log an out-of-order message. 
         if(lastSeq > seq) {
-          logMsg = "***OUT-OF-ORDER***\n" +
-                   "   Message # " + seq + " came after " + lastSeq + "\n";
+          String logMsg = "*** OUT-OF-ORDER ***\n"
+                        + "   Message # " + seq + " came after " + lastSeq + "\n";
+          Util.log(lStream, logMsg);
         }
-        lStream.write(logMsg.getBytes());
-        System.out.println(logMsg);
         
         // Check for and log message corruption.
         CRC32 checksum = new CRC32();
-        checksum.update(data);
-        if (checksum.getValue() != msgData.checksum) {
-          logMsg = "***CORRUPT***\n" + 
-                   "   Message # " + seq + " is not the same as when it was sent.\n";
+        checksum.update(vMsg.payload);
+        if (checksum.getValue() != vMsg.checksum) {
+          String logMsg = "*** CORRUPT ***\n" 
+                 + "   Message #" + seq + " is not the same as when it was sent.\n";
+          Util.log(lStream, logMsg);
         }
+        return Util.VIDEO_FRAME;
       }
+      return Util.IRREG_MSG;
     } catch (Exception e) {
       e.printStackTrace();
       System.exit(1);
     }
+    return Util.PROBLEM;
   }
 
-  private void printMsg(SpreadMessage msg, String msgType, boolean printData) {
-    System.out.print("Received a ");
-    if (msg.isUnreliable())
-      System.out.print("UNRELIABLE");
-    else if (msg.isReliable())
-      System.out.print("RELIABLE");
-    else if (msg.isFifo())
-      System.out.print("FIFO");
-    else if (msg.isCausal())
-      System.out.print("CAUSAL");
-    else if (msg.isAgreed())
-      System.out.print("AGREED");
-    else if (msg.isSafe())
-      System.out.print("SAFE");
-    System.out.println(msgType + " message.");
-
-    System.out.println("Sent by  " + msg.getSender() + ".");
-
-    System.out.println("Type is " + msg.getType() + ".");
-
-    if (msg.getEndianMismatch() == true)
-      System.out.println("There is an endian mismatch.");
-    else
-      System.out.println("There is no endian mismatch.");
-
-    SpreadGroup groups[] = msg.getGroups();
-    System.out.println("To " + groups.length + " groups.");
-
-    byte data[] = msg.getData();
-    System.out.println("The data is " + data.length + " bytes.");
-
-    if (printData) {
-      System.out.println("The message is: " + new String(data));
-    }
+  private void leaveJoin() throws Exception {
+    String gName = group.toString();
+    group.leave();
+    Thread.sleep(Util.LEAVE_LENGTH_MS);
+    group.join(connection, gName);
   }
-
+  
+  private void end() {
+    Util.closeLog(lStream);
+    System.exit(0);
+  }
+  
   public void run() {
-    while (true) {
+    boolean stop = false;
+    // Start receivers thrashing in a staggered fashion.
+    long tJoined = System.nanoTime() + thrashID * (Util.THRASH_PERIOD_NS / Util.NUM_THRASHERS);
+    
+    while (!stop) {
       try {
-        handleMessage(connection.receive());
+        // Receive a message if there is one.
+        if (connection.poll()) {
+          switch (handleMessage(connection.receive())) {
+            case Util.TERM_MSG: {
+              long tRcv = System.nanoTime() - tStart;
+              double bps = bytesIn / (double)(tRcv / 1000000000);
+              String logMsg = "\n*** TEST COMPLETED ***\n"
+                            + "Received a total of " + numMsgs + " messages.\n"
+                            + "Received a total of " + bytesIn + " bytes.\n"
+                            + "Receive rate: " + bps + " bytes per second.\n"
+                            ;
+              Util.log(lStream, logMsg);
+              stop = true;
+              break;
+            }
+          }
+        }
+        
+        // Periodically leave and join the group.
+        if (thrash && (System.nanoTime() - tJoined) >= Util.THRASH_PERIOD_NS) {
+          leaveJoin();
+          tJoined = System.nanoTime();
+        }
 
+        // Check whether the monitor wants to stop us.
         if (threadSuspended) {
           synchronized (this) {
             group.leave();
-            String logMsg = "\n+++END OF TEST+++\n" +
-                            "Received a total of " + numMsgs + " messages.\n";
-            lStream.write(logMsg.getBytes());
-            lStream.close();
-            System.exit(0);
+            String logMsg = "\n*** TEST INTERRUPTED ***\n"
+                          + "Received a total of " + numMsgs + " messages.\n";
+            Util.log(lStream, logMsg);
+            end();
           }
         }
       } catch (Exception e) {
-
+        e.printStackTrace();
       }
     }
+    end();
   }
 }

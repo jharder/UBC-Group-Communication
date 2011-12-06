@@ -18,7 +18,7 @@ public class Sender extends Thread implements Runnable {
   
   // Video
   VideoStream video;             // VideoStream object used to access video frames
-  static int FRAME_PERIOD = 100; // Frame period of the video to stream, in ms
+  static final int FRAME_PERIOD = 100; // Frame period of the video to stream, in ms
   byte[] buf;                    // Buffer used to store the images to send to the client
   static String VideoFileName;   // Video file requested from the client
 
@@ -37,13 +37,17 @@ public class Sender extends Thread implements Runnable {
     name = userName;
     seqnum = 0;
 
+    // Prepare to log.
     try {
-      fStream = new FileOutputStream(lFile, true);
-    } catch (FileNotFoundException e1) {
+      fStream = new FileOutputStream(lFile, false);
+    } catch (Exception e1) {
       e1.printStackTrace();
     }
+    String logMsg = "*****************************************************\n"
+        + "+++ SENDER INSTANTIATED +++\n";
+    Util.log(fStream, logMsg);
 
-    // Allocate memory for the sending buffer
+    // Allocate memory for the sending buffer.
     buf = new byte[15000];
 
     // Establish the spread connection.
@@ -64,11 +68,14 @@ public class Sender extends Thread implements Runnable {
   /*
    * Sends a frame
    */
-  private void sendFrame() {
+  private int sendFrame() {
     try {
       // Get next frame to send from the video.
       seqnum++;
-      video.getNextFrame(buf);
+      int retval = video.getNextFrame(buf); 
+      if (retval < 0) {
+        return 1;
+      }
       
       // Wrap it in a serialized object.
       VideoMsg msgData = new VideoMsg(buf, seqnum);
@@ -85,14 +92,13 @@ public class Sender extends Thread implements Runnable {
       msg.setData(sendData);
 
       // Send the message and log it.
-      String logMsg = "Sending frame " + seqnum + "\n";
-      System.out.println(logMsg);
-      fStream.write(logMsg.getBytes());
+      Util.log(fStream, "Sending frame " + seqnum + "\n");
       connection.multicast(msg);
     } catch (Exception ex) {
       System.out.println("Exception caught: " + ex);
       System.exit(0);
     }
+    return 0;
   }
   
   public String getGroupName() {
@@ -101,26 +107,50 @@ public class Sender extends Thread implements Runnable {
 
   public void run() {
     while (true) {
-      sendFrame();
+      if (sendFrame() != 0) {
+        try {
+          // Create a termination message and wrap it in a serialized object.
+          VideoMsg msgData = new VideoMsg(Util.TERM_MSG);
+          ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+          ObjectOutputStream objectStream = new ObjectOutputStream(byteStream);
+          objectStream.writeObject(msgData);
+          objectStream.close();
+          byte[] sendData = byteStream.toByteArray();
+  
+          // Insert the serialized object into a Spread message.
+          SpreadMessage msg = new SpreadMessage();
+          msg.setUnreliable();
+          msg.addGroup(name);
+          msg.setData(sendData);
+  
+          // Send the message and log it.
+          Util.log(fStream, "Sending termination message.\n");
+          connection.multicast(msg);
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+        break;
+      }
+      
       try {
         Thread.sleep(FRAME_PERIOD);
       } catch (InterruptedException e) {
         e.printStackTrace();
         System.exit(1);
       }
+
+      // Check whether the monitor wants to stop us.
       if (threadSuspended) {
         synchronized (this) {
           String logMsg = "\n+++END OF TEST+++\n" +
                           "Sent a total of " + seqnum + " messages.\n";
-          try {
-            fStream.write(logMsg.getBytes());
-            fStream.close();
-          } catch (IOException e) {
-            e.printStackTrace();
-          }
+          Util.log(fStream, logMsg);
+          Util.closeLog(fStream);
           System.exit(0);
         }
       }
     }
+    Util.closeLog(fStream);
+    System.exit(0);
   }
 }

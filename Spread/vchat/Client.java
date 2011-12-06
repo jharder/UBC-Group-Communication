@@ -1,21 +1,17 @@
 package vchat;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Set;
 
 import spread.MembershipInfo;
 import spread.SpreadConnection;
 import spread.SpreadException;
 import spread.SpreadGroup;
 import spread.SpreadMessage;
-import sun.awt.PeerEvent;
 
 public class Client extends Thread implements Runnable {
   static String VideoFileName; // video file requested from the client
@@ -41,7 +37,6 @@ public class Client extends Thread implements Runnable {
     logFile = lFile;
 
     // Establish the spread connection.
-    // --------------------------------
     try {
       connection = new SpreadConnection();
       connection
@@ -130,20 +125,7 @@ public class Client extends Thread implements Runnable {
   private void handleMessage(SpreadMessage msg) {
     try {
       if (msg.isRegular()) {
-//        // Create a new Receiver object for this new peer.
-//        String pName = msg.getSender().toString();
-//        String rName = name + "_r_" + numRcvrs;
-//        if (!peers.containsKey(pName) && !rcvrs.contains(rName)) {
-//          Receiver newrcvr = new Receiver(rName, dAddr, dPort, groupName,
-//              logFile);
-//          peers.put(pName, newrcvr);
-//          rcvrs.add(rName);
-//          newrcvr.start();
-//          numRcvrs++;
-//        } else {
-//          // Discard the message and let the Receiver object take care of
-//          // it
-//        }
+        // Let the appropriate Receiver object handle the message.
       } else if (msg.isMembership()) {
         System.out
             .println("*****************CLIENT Received Message************");
@@ -153,7 +135,7 @@ public class Client extends Thread implements Runnable {
         // Received a Reject message
         System.out
             .println("*****************CLIENT Received Message************");
-        printMsg(msg, "Reject", false);
+        Util.printMsg(msg, "Reject", false);
       } else {
         System.out.println("Message is of unknown type: "
             + msg.getServiceType());
@@ -161,42 +143,6 @@ public class Client extends Thread implements Runnable {
     } catch (Exception e) {
       e.printStackTrace();
       System.exit(1);
-    }
-  }
-
-  private void printMsg(SpreadMessage msg, String msgType, boolean printData) {
-    System.out.print("Received a ");
-    if (msg.isUnreliable())
-      System.out.print("UNRELIABLE");
-    else if (msg.isReliable())
-      System.out.print("RELIABLE");
-    else if (msg.isFifo())
-      System.out.print("FIFO");
-    else if (msg.isCausal())
-      System.out.print("CAUSAL");
-    else if (msg.isAgreed())
-      System.out.print("AGREED");
-    else if (msg.isSafe())
-      System.out.print("SAFE");
-    System.out.println(" REJECTED message.");
-
-    System.out.println("Sent by  " + msg.getSender() + ".");
-
-    System.out.println("Type is " + msg.getType() + ".");
-
-    if (msg.getEndianMismatch() == true)
-      System.out.println("There is an endian mismatch.");
-    else
-      System.out.println("There is no endian mismatch.");
-
-    SpreadGroup groups[] = msg.getGroups();
-    System.out.println("To " + groups.length + " groups.");
-
-    byte data[] = msg.getData();
-    System.out.println("The data is " + data.length + " bytes.");
-
-    if (printData) {
-      System.out.println("The message is: " + new String(data));
     }
   }
 
@@ -255,11 +201,19 @@ public class Client extends Thread implements Runnable {
     String address = null;
     int port = 0;
     ArrayList<String> groupsToJoin = new ArrayList<String>();
+    String thrashGroup = "dummy_group";
     String lFileBase = "vchat_log";
 
-    boolean gotVideo = false;
+    boolean gotVideo   = false;
+    boolean pingMode   = false;
+    boolean thrashMode = false;
 
     // Check the args.
+    if (argv.length == 0){
+      printUsage();
+      System.exit(0);
+    }
+    
     for (int i = 0; i < argv.length; i++) {
       // Check for user name.
       if ((argv[i].compareTo("-u") == 0) && (argv.length > (i + 1))) {
@@ -279,11 +233,30 @@ public class Client extends Thread implements Runnable {
         i++;
         port = Integer.parseInt(argv[i]);
       }
-      // Check for group to join.
+      // Check for ping mode.
+      else if ((argv[i].compareTo("-p") == 0)/* && (argv.length > (i + 1))*/) {
+        // Set ping mode.
+        pingMode = true;
+      }
+      // Check for thrash mode.
+      else if ((argv[i].compareTo("-t") == 0)/* && (argv.length > (i + 1))*/) {
+        // Set thrash mode.
+        i++;
+        thrashMode = true;
+        thrashGroup = argv[i];
+      }
+      // Check for group to join as a receiver.
       else if ((argv[i].compareTo("-r") == 0) && (argv.length > (i + 1))) {
         // Set the group.
         i++;
         groupsToJoin.add(argv[i]);
+      }
+      // Check for video file name. 
+      else if ((argv[i].compareTo("-s") == 0) && (argv.length > (i + 1))) {
+        // Set the file name.
+        i++;
+        VideoFileName = argv[i];
+        gotVideo = true;
       }
       // Check for log file name.
       else if ((argv[i].compareTo("-l") == 0) && (argv.length > (i + 1))) {
@@ -291,13 +264,7 @@ public class Client extends Thread implements Runnable {
         i++;
         lFileBase = argv[i];
       }
-      // Check for video file name.
-      else if ((argv[i].compareTo("-s") == 0) && (argv.length > (i + 1))) {
-        // Set the file name.
-        i++;
-        VideoFileName = argv[i];
-        gotVideo = true;
-      } else {
+      else {
         printUsage();
         System.exit(0);
       }
@@ -307,6 +274,7 @@ public class Client extends Thread implements Runnable {
         lFileBase);
     monitor.start();
 
+    // Create objects to provide the requested functionality.
     if (gotVideo) {
       // Create a Sender object.
       s = new Sender(userName, address, port, lFileBase + "_s");
@@ -314,24 +282,47 @@ public class Client extends Thread implements Runnable {
       s.start();
     }
     if (!groupsToJoin.isEmpty()) {
-      for(String g : groupsToJoin) {
-        // Create a Receiver object.
+      // Create a Receiver object for each group we are subscribing to.
+      for (String g : groupsToJoin) {
         String rName = userName + "_R" + g;
-        Receiver r = new Receiver(rName, address, port, g, lFileBase + "_r");
+        Receiver r = new Receiver(rName, address, port, g, lFileBase + rName, false);
         monitor.receivers.put(rName, r);
         r.start();
         numRcvrs++;
       }  
+    } else if (groupsToJoin.isEmpty() && pingMode) {
+      // Create a Pinger object.
+      Pinger p = new Pinger(userName, address, port, lFileBase + "_p");
+      p.start();
+    } else if (thrashMode) {
+      // Create many Receiver objects with the thrash variable set on all but one.
+      for (int i = 0; i < Util.NUM_THRASHERS + 1; i++) {
+        String rName = userName + "_RT_" + i + "_" + thrashGroup;
+        boolean isThrasher = (i != Util.NUM_THRASHERS ? true : false);
+        Receiver r = new Receiver(rName, address, port, thrashGroup, lFileBase + rName, isThrasher);
+        monitor.receivers.put(rName, r);
+        r.start();
+        numRcvrs++;
+      }
     }
   }
 
-  // TODO: Update this
   private static void printUsage() {
     System.out.print("Usage: Client\n"
-        + "\t[-u <user name>]   : unique user name\n"
-        + "\t[-s <address>]     : the name or IP for the daemon\n"
-        + "\t[-p <port>]        : the port for the daemon\n"
-        + "\t[-g <group name>]    : the group to join\n"
-        + "\t-v <video file name>  : the video file to multicast\n");
+        + "\t[-u <user_name>]        : Sets the unique user name.\n"
+        + "\t[-da <address>]         : Sets the name or IP of the daemon to be used.\n"
+        + "\t[-dp <port>]            : Sets the port for the daemon to be used.\n"
+        + "\t[-p]                    : Sets ping mode. If -r is specified, it\n"
+        + "\t                          will respond to any message to the specified\n"
+        + "\t                          group with a pong). Otherwise a ping test\n"
+        + "\t                          will be started.\n"
+        + "\t[-t <group_name>        : Sets thrash mode. Will start many receivers\n"
+        + "\t                          and cause them to frequently leave and join\n"
+        + "\t                          the group\n"
+        + "\t[-r <group_name>]       : Starts a receiver that listens for messages\n"
+        + "\t                          sent to the specified group.\n"
+        + "\t[-s <video_file_name>]  : Starts a sender that multicasts the\n"
+        + "\t                          specified file.\n"
+        + "\t[-l <log_file_name>]    : Sets the base name for log files.\n"); 
   }
 }
