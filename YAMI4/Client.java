@@ -10,6 +10,7 @@ import java.lang.management.ManagementFactory;
 import java.util.logging.FileHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.zip.CRC32;
 
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;
@@ -31,12 +32,13 @@ public class Client {
 	JFrame f = new JFrame("Client");
 	JPanel mainPanel = new JPanel();
 	static JLabel iconLabel = new JLabel();
-	static long startTime, endTime, throughputStart;
-	static int throughput;
+	static long pingStartTime, pingEndTime, throughputStartTime, clientStartTime;
+	static int lastFrameNumber, framesReceived, bytesReceived, bytesReceivedTotal = 0;
 	static ImageIcon icon;
 	static String serverAddress, clientID;
 	static Agent clientAgent;
 	static Logger loggerVideo, loggerPing, loggerInfo;
+	static CRC32 crc32;
 
 	public Client() {
 		//build GUI
@@ -67,14 +69,19 @@ public class Client {
 			try {
 				Parameters pingParam = new Parameters();
 				pingParam.setString("clientID", clientID);
+				double bps;
 
 				while (true) {
-					startTime = System.currentTimeMillis();
+					pingStartTime = System.currentTimeMillis();
 					clientAgent.sendOneWay(serverAddress, "ping-client-"+clientID, "publish", pingParam);
+					
+					// calculate running throughput
+					bps = bytesReceivedTotal / (double)((System.currentTimeMillis() - clientStartTime) / 1000);
+					loggerInfo.fine("Bytes per second: "+ bps +". Total bytes received: "+bytesReceivedTotal +". Total messages received: "+framesReceived);
 					Thread.sleep(1000);
 				}
 			} catch (Exception e) {
-				loggerPing.severe("Error in Client while attempting ping");
+				loggerPing.severe("Error in Client while attempting ping: "+e.getMessage());
 			}
 		}
 	}
@@ -82,33 +89,49 @@ public class Client {
 	private static class PingHandler implements IncomingMessageCallback {
 		@Override
 		public void call(IncomingMessage im) throws Exception {
-			loggerPing.fine("Ping RTT received: "+(System.currentTimeMillis() - startTime) +"ms");
+			loggerPing.fine("Ping RTT received: "+(System.currentTimeMillis() - pingStartTime) +"ms");
 		}
 	}
 
 	private static class UpdateHandler implements IncomingMessageCallback {
 		@Override
 		public void call(IncomingMessage im) throws Exception {
+			framesReceived++;
 			Parameters content = im.getParameters();
-			byte[] frame = content.getBinary("videoFrame");
+			byte[] frame = new byte[15000];
+			frame = content.getBinary("videoFrame");
 			int frameNum = content.getInteger("frameNum");
-			long crc = content.getLong("crc");
+			long serverCRC = content.getLong("crc");
 			String throughputCount = "";
+			String crcMismatch = "";
 			long currentTime = System.currentTimeMillis();
+			
+			if (lastFrameNumber > 0 && lastFrameNumber > frameNum && lastFrameNumber != 500 && frameNum != 1) // out of order frame received
+				loggerVideo.severe("Out of order frame received.  Previous frame "+lastFrameNumber+", current frame "+frameNum);
 
-			if ((currentTime - throughputStart) >= 1000) { // new second, restart count
-				throughputCount = "Throughput for the last "+(currentTime - throughputStart)+"ms is "+ throughput +" bytes";
-				throughput = 0;
-				throughputStart = System.currentTimeMillis();
+			if ((currentTime - throughputStartTime) >= 1000) { // new second, restart count
+				throughputCount = "Throughput for the last "+(currentTime - throughputStartTime)+"ms is "+ bytesReceived +" bytes";
+				bytesReceived = 0;
+				throughputStartTime = System.currentTimeMillis();
 			}
+			
+			crc32.reset();
+			crc32.update(frame);
+			long clientCRC = crc32.getValue();
+			
+			if (clientCRC != serverCRC) // message is corrupt
+				crcMismatch = ". Corrupt frame received.  Frame number "+frameNum+", server CRC "+ serverCRC +", client CRC "+clientCRC;
 
-			throughput += content.toString().length();
-			loggerVideo.log(Level.FINE, "Frame: "+ frameNum +" ("+crc+"). Size: "+content.toString().length() +" bytes. "+ throughputCount);
+			bytesReceivedTotal += content.toString().length();
+			bytesReceived += content.toString().length();
+			loggerVideo.fine("Frame: "+ frameNum +" ("+clientCRC+"). Size: "+content.toString().length() +" bytes. "+ throughputCount + crcMismatch);
+			lastFrameNumber = frameNum;
 
 			Toolkit toolkit = Toolkit.getDefaultToolkit();
 			Image imageFrame = toolkit.createImage(frame, 0, frame.length);
 			icon = new ImageIcon(imageFrame);
 			iconLabel.setIcon(icon);
+			crc32.reset();
 		}
 	}
 
@@ -118,6 +141,8 @@ public class Client {
 	public static void main(String[] args) {
 		try {
 			clientID = ManagementFactory.getRuntimeMXBean().getName();
+			clientStartTime = System.currentTimeMillis();
+			crc32 = new CRC32();
 			
 			FileHandler clientLogVideo = new FileHandler("client"+clientID+"-video.log");
 			FileHandler clientLogPing = new FileHandler("client"+clientID+"-ping.log");
@@ -141,11 +166,10 @@ public class Client {
 		}
 
 		for (int i = 0; i < args.length; i++) {
-			System.out.println(args[0]);
 			if (args[i].toString().equals("-s")) {
-				serverAddress = "tcp://"+args[1];
-				loggerInfo.info("Client initialized with server address "+serverAddress);
 				i++;
+				serverAddress = "tcp://"+args[i];
+				loggerInfo.info("Client initialized with server address "+serverAddress);
 			} else
 				System.exit(2);
 		}
@@ -173,7 +197,7 @@ public class Client {
 			pingParam.setString("destination_object", "ping_handler");
 			clientAgent.sendOneWay(serverAddress, "ping-server-"+clientID, "subscribe", pingParam);
 			loggerPing.info("subscribed to ping-server-"+clientID+" group");
-			throughputStart = System.currentTimeMillis();
+			throughputStartTime = System.currentTimeMillis();
 
 			Thread ping = new Pinger();
 			ping.start();

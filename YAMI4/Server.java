@@ -75,9 +75,9 @@ public class Server {
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].toString().equals("-s")) {
-				serverAddress = "tcp://"+args[1];
-				loggerInfo.fine("Server initialized with server address "+serverAddress);
 				i++;
+				serverAddress = "tcp://"+args[i];
+				loggerInfo.fine("Server initialized with server address "+serverAddress);
 			} else {
 				System.exit(2);
 			}
@@ -105,8 +105,10 @@ public class Server {
 
 			while (true) {
 				frameNum = video.getNextFrame(buf);
+				crc.reset();
 				crc.update(buf);
 				crcValue = crc.getValue();
+				crc.reset();
 				param.setLong("crc", crcValue);
 				param.setBinary("videoFrame", buf);
 				param.setInteger("frameNum", frameNum);
