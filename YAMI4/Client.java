@@ -33,12 +33,13 @@ public class Client {
 	JPanel mainPanel = new JPanel();
 	static JLabel iconLabel = new JLabel();
 	static long pingStartTime, pingEndTime, throughputStartTime, clientStartTime;
-	static int lastFrameNumber, framesReceived, bytesReceived, bytesReceivedTotal = 0;
+	static int lastFrameNumber, framesReceived, bytesReceived, pingCount, bytesReceivedTotal = 0;
 	static ImageIcon icon;
 	static String serverAddress, clientID;
 	static Agent clientAgent;
 	static Logger loggerVideo, loggerPing, loggerInfo;
 	static CRC32 crc32;
+	static double pingTotal;
 
 	public Client() {
 		//build GUI
@@ -74,10 +75,11 @@ public class Client {
 				while (true) {
 					pingStartTime = System.currentTimeMillis();
 					clientAgent.sendOneWay(serverAddress, "ping-client-"+clientID, "publish", pingParam);
-					
+					pingCount++;
+
 					// calculate running throughput
 					bps = bytesReceivedTotal / (double)((System.currentTimeMillis() - clientStartTime) / 1000);
-					loggerInfo.fine("Bytes per second: "+ bps +". Total bytes received: "+bytesReceivedTotal +". Total messages received: "+framesReceived);
+					loggerInfo.fine("Average bps: "+ bps +". Total bytes received: "+bytesReceivedTotal +". Total messages received: "+framesReceived);
 					Thread.sleep(1000);
 				}
 			} catch (Exception e) {
@@ -89,7 +91,9 @@ public class Client {
 	private static class PingHandler implements IncomingMessageCallback {
 		@Override
 		public void call(IncomingMessage im) throws Exception {
-			loggerPing.fine("Ping RTT received: "+(System.currentTimeMillis() - pingStartTime) +"ms");
+			long currentPingTime = System.currentTimeMillis() - pingStartTime;
+			pingTotal += currentPingTime;
+			loggerPing.fine("Ping RTT received: "+currentPingTime +"ms. Ping average: "+(pingTotal/pingCount) +"ms");
 		}
 	}
 
@@ -105,7 +109,7 @@ public class Client {
 			String throughputCount = "";
 			String crcMismatch = "";
 			long currentTime = System.currentTimeMillis();
-			
+
 			if (lastFrameNumber > 0 && lastFrameNumber > frameNum && lastFrameNumber != 500 && frameNum != 1) // out of order frame received
 				loggerVideo.severe("Out of order frame received.  Previous frame "+lastFrameNumber+", current frame "+frameNum);
 
@@ -114,11 +118,11 @@ public class Client {
 				bytesReceived = 0;
 				throughputStartTime = System.currentTimeMillis();
 			}
-			
+
 			crc32.reset();
 			crc32.update(frame);
 			long clientCRC = crc32.getValue();
-			
+
 			if (clientCRC != serverCRC) // message is corrupt
 				crcMismatch = ". Corrupt frame received.  Frame number "+frameNum+", server CRC "+ serverCRC +", client CRC "+clientCRC;
 
@@ -139,11 +143,30 @@ public class Client {
 	 * @param args
 	 */
 	public static void main(String[] args) {
+		boolean gui = true;
+
+		if (args.length == 0) {
+			System.out.println("Usage:");
+			System.out.println("-s\t\tBroker address to connect to, without tcp://");
+			System.out.println("--nogui\t\tDisable GUI");
+			System.exit(2);
+		}
+
+		for (int i = 0; i < args.length; i++) {
+			if (args[i].toString().equals("-s")) {
+				i++;
+				serverAddress = "tcp://"+args[i];
+				
+			} else if (args[i].toString().equals("--nogui"))
+				gui = false;
+		}
+		
 		try {
+			pingTotal = 0;
 			clientID = ManagementFactory.getRuntimeMXBean().getName();
 			clientStartTime = System.currentTimeMillis();
 			crc32 = new CRC32();
-			
+
 			FileHandler clientLogVideo = new FileHandler("client"+clientID+"-video.log");
 			FileHandler clientLogPing = new FileHandler("client"+clientID+"-ping.log");
 			FileHandler clientLogInfo = new FileHandler("client"+clientID+"-info.log");
@@ -165,16 +188,10 @@ public class Client {
 			System.exit(1);
 		}
 
-		for (int i = 0; i < args.length; i++) {
-			if (args[i].toString().equals("-s")) {
-				i++;
-				serverAddress = "tcp://"+args[i];
-				loggerInfo.info("Client initialized with server address "+serverAddress);
-			} else
-				System.exit(2);
-		}
+		loggerInfo.info("Client initialized with server address tcp://"+serverAddress);
 
-		new Client();
+		if (gui)
+			new Client();
 
 		try {
 			clientAgent = new Agent();

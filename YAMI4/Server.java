@@ -49,6 +49,21 @@ public class Server {
 	 * @throws InterruptedException 
 	 */
 	public static void main(String[] args) throws InterruptedException {
+		if (args.length == 0) {
+			System.out.println("Usage:");
+			System.out.println("-s\t\tBroker address to connect to, without tcp://");
+			System.exit(2);
+		}
+
+		for (int i = 0; i < args.length; i++) {
+			if (args[i].toString().equals("-s")) {
+				i++;
+				serverAddress = "tcp://"+args[i];
+			} else {
+				System.exit(2);
+			}
+		}
+		
 		try {
 			String serverID = ManagementFactory.getRuntimeMXBean().getName();
 
@@ -72,16 +87,8 @@ public class Server {
 			System.out.println("Server: Error setting up the loggers: "+e.getMessage());
 			System.exit(1);
 		}
-
-		for (int i = 0; i < args.length; i++) {
-			if (args[i].toString().equals("-s")) {
-				i++;
-				serverAddress = "tcp://"+args[i];
-				loggerInfo.fine("Server initialized with server address "+serverAddress);
-			} else {
-				System.exit(2);
-			}
-		}
+		
+		loggerInfo.fine("Server initialized with server address tcp://"+serverAddress);
 
 		byte[] buf = new byte[15000];
 

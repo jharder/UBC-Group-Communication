@@ -1,3 +1,8 @@
+Dec 07, 2011:
+- Averaging ping time overall
+- Cleaned up CLI parameter handling
+- Added --nogui option
+
 Dec 05, 2011 (second update):
 - Implemented tests
 	- Message out of order
