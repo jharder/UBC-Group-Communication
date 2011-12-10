@@ -1,3 +1,27 @@
+Dec 10, 2011:
+- Final code checkin
+
+Dec 07, 2011:
+- Averaging ping time overall
+- Cleaned up CLI parameter handling
+- Added --nogui option
+
+Dec 05, 2011 (second update):
+- Implemented tests
+	- Message out of order
+	- CRC mismatch
+	- Throughput calculation as running total
+
+Dec 05, 2011:
+- Ping implemented
+	- Client forms unique group with server
+	- Client sends initial ping to group
+	- Server responds on known unique group
+	- Server listens on public group for subscription purposes from new clients
+- Logging with custom formatter enabled for Video, Ping, and Info
+- Throughput being calculated every >= 1000ms
+- Made client and server accept command-line parameter specifying broker to listen to
+
 Nov 07, 2011 (second update):
 - Video looping enabled (see VideoStream.java)
 - Video streams at ~24fps (normal NTSC speed)

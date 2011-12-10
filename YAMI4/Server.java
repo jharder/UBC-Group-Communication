@@ -1,12 +1,15 @@
-/**
- * 
- */
 package yami;
 
+import java.lang.management.ManagementFactory;
+import java.util.logging.FileHandler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.zip.CRC32;
+
 import com.inspirel.yami.Agent;
+import com.inspirel.yami.IncomingMessage;
+import com.inspirel.yami.IncomingMessageCallback;
 import com.inspirel.yami.Parameters;
-import com.inspirel.yami.ValuePublisher;
-import com.inspirel.yami.YAMIIOException;
 
 /**
  * @author Jared Harder
@@ -14,39 +17,121 @@ import com.inspirel.yami.YAMIIOException;
  */
 public class Server {
 	static VideoStream video;
+	static int frameNum;
+	static Agent serverAgent;
+	static String serverAddress;
+	static Logger loggerVideo, loggerPing, loggerInfo;
 
-	public Server() {}
+	private static class PingHandler implements IncomingMessageCallback {
+		@Override
+		public void call(IncomingMessage im) throws Exception {
+			Parameters content = im.getParameters();
+			String clientID = content.getString("clientID");
+			serverAgent.sendOneWay(serverAddress, "ping-server-"+clientID, "publish", null);
+			loggerPing.fine("Ping request from ping-client-"+clientID+" group. Replied to ping-server"+clientID+" group.");
+		}
+	}
+
+	private static class UpdateHandler implements IncomingMessageCallback {
+		@Override
+		public void call(IncomingMessage im) throws Exception {
+			Parameters content = im.getParameters();
+			Parameters pingParam = new Parameters();
+			String clientID = content.getString("clientID");
+			pingParam.setString("destination_object", "ping_handler");
+			serverAgent.sendOneWay(serverAddress, "ping-client-"+clientID, "subscribe", pingParam);
+			loggerPing.info("Subscribe to ping-client-"+clientID+" group");
+		}
+	}
 
 	/**
 	 * @param args
 	 * @throws InterruptedException 
 	 */
 	public static void main(String[] args) throws InterruptedException {
-		String serverAddress = "tcp://192.168.1.65:3334";
+		if (args.length == 0) {
+			System.out.println("Usage:");
+			System.out.println("-s\t\tBroker address to connect to, without tcp://");
+			System.exit(2);
+		}
+
+		for (int i = 0; i < args.length; i++) {
+			if (args[i].toString().equals("-s")) {
+				i++;
+				serverAddress = "tcp://"+args[i];
+			} else {
+				System.exit(2);
+			}
+		}
+		
+		try {
+			String serverID = ManagementFactory.getRuntimeMXBean().getName();
+
+			FileHandler serverLogVideo = new FileHandler("server-"+serverID+"-video.log");
+			FileHandler serverLogPing = new FileHandler("server-"+serverID+"-ping.log");
+			FileHandler serverLogInfo = new FileHandler("server-"+serverID+"-info.log");
+			loggerVideo = Logger.getLogger("videoLogger");
+			loggerPing = Logger.getLogger("pingLogger");
+			loggerInfo = Logger.getLogger("InfoLogger");
+			loggerVideo.setLevel(Level.ALL);
+			loggerPing.setLevel(Level.ALL);
+			loggerInfo.setLevel(Level.ALL);
+			loggerVideo.addHandler(serverLogVideo);
+			loggerPing.addHandler(serverLogPing);
+			loggerInfo.addHandler(serverLogInfo);
+			YamiFormatter formatter = new YamiFormatter();
+			serverLogVideo.setFormatter(formatter);
+			serverLogPing.setFormatter(formatter);
+			serverLogInfo.setFormatter(formatter);
+		} catch (Exception e) {
+			System.out.println("Server: Error setting up the loggers: "+e.getMessage());
+			System.exit(1);
+		}
+		
+		loggerInfo.fine("Server initialized with server address tcp://"+serverAddress);
+
 		byte[] buf = new byte[15000];
 
 		try {
-			video = new VideoStream("C:\\movie.Mjpeg");
+			video = new VideoStream("movie.Mjpeg");
 
-			Agent serverAgent = new Agent();
+			serverAgent = new Agent();
 			Parameters param = new Parameters();
-			ValuePublisher valPub = new ValuePublisher();
+			Parameters pingParam = new Parameters();
+			serverAgent.registerObject("update_handler", new UpdateHandler());
+			loggerInfo.info("Registered update_handler");
+			serverAgent.registerObject("ping_handler", new PingHandler());
+			loggerInfo.info("Registered ping_handler");
+			pingParam.setString("destination_object", "update_handler");
+			serverAgent.sendOneWay(serverAddress, "ping-client", "subscribe", pingParam);
+			loggerPing.info("Subscribe to ping-client group");
+			pingParam.clear();
 
-			serverAgent.addListener(serverAddress);
-			serverAgent.registerValuePublisher("server", valPub);
+			CRC32 crc = new CRC32();
+			long crcValue;
+			int[] videoValue;
+			int frameSize;
 
 			while (true) {
-				video.getNextFrame(buf);
-				//param.setLong("time", System.currentTimeMillis());
+				videoValue = video.getNextFrame(buf);
+				frameNum = videoValue[0];
+				frameSize = videoValue[1];
+				crc.reset();
+				crc.update(buf);
+				crcValue = crc.getValue();
+				crc.reset();
+				param.setLong("crc", crcValue);
 				param.setBinary("videoFrame", buf);
-				valPub.publish(param);
+				param.setInteger("frameNum", frameNum);
+				param.setInteger("frameSize", buf.length);
 
-				Thread.sleep(42);
+				loggerVideo.fine("Frame: "+ frameNum +" ("+crcValue+"). Size: "+frameSize +" bytes");
+				serverAgent.sendOneWay(serverAddress, "video", "publish", param);
+
+				Thread.sleep(40);
 			}
-		} catch (YAMIIOException e) {
-			System.out.println("server: "+e.getMessage());
 		} catch (Exception e) {
-			e.printStackTrace();
+			loggerInfo.severe("Server encountered an error: "+ e.getMessage());
 		}
 	}
 }

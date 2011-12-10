@@ -1,0 +1,18 @@
+Print:
+0
+Graphics:
+0
+Milliseconds per tick:
+1
+Milliseconds per frame:
+40
+Milliseconds per ping:
+1000
+Minimum message size:
+15000
+Milliseconds per timed snapshot:
+0
+Default servers to start:
+//cs416 asdf
+//cs416 qwer
+end

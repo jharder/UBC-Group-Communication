@@ -1,0 +1,1 @@
+java -Djava.net.preferIPv4Stack=true -jar ../videotest.jar
