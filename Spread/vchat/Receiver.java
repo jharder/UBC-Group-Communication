@@ -116,7 +116,7 @@ public class Receiver extends Thread implements Runnable {
    */
   private void sendPong(SpreadGroup sender) {
       SpreadMessage msg = new SpreadMessage();
-      msg.setUnreliable();
+      msg.setSafe();
       msg.addGroup(sender);
 
       // Send the message and log it.
@@ -136,6 +136,7 @@ public class Receiver extends Thread implements Runnable {
       if (msg.isRegular()) {
 //        Util.printMsg(msg, "Regular", false);
         // Extract data from the message.
+        // TODO: Use getObject()?
         byte spreadPayload[] = msg.getData();
         ByteArrayInputStream byteStream = new ByteArrayInputStream(spreadPayload);
         ObjectInputStream objectStream = new ObjectInputStream(byteStream);
@@ -161,7 +162,7 @@ public class Receiver extends Thread implements Runnable {
         numMsgs ++;
         bytesIn += spreadPayload.length;
         int seq = vMsg.seqnum;
-        Util.log(lStream, "Received frame from " + msg.getSender() + " seq. # " + seq + " size " + spreadPayload.length + "\n");
+        Util.log(lStream, "Received frame from " + msg.getSender() + " seq. #," + seq + ", size ," + spreadPayload.length + ", bytes\n");
         
         // Check for and log an out-of-order message. 
         if(lastSeq > seq) {

@@ -18,7 +18,7 @@ public class Sender extends Thread implements Runnable {
   
   // Video
   VideoStream video;             // VideoStream object used to access video frames
-  static final int FRAME_PERIOD = 100; // Frame period of the video to stream, in ms
+  static final int FRAME_PERIOD = 40; // Frame period of the video to stream, in ms
   byte[] buf;                    // Buffer used to store the images to send to the client
   static String VideoFileName;   // Video file requested from the client
 
@@ -87,12 +87,13 @@ public class Sender extends Thread implements Runnable {
 
       // Insert the serialized object into a Spread message.
       SpreadMessage msg = new SpreadMessage();
-      msg.setUnreliable();
+      msg.setSafe();
       msg.addGroup(name);
+      // TODO: Use setObject()
       msg.setData(sendData);
 
       // Send the message and log it.
-      Util.log(fStream, "Sending frame " + seqnum + "\n");
+      Util.log(fStream, "Sending frame ," + seqnum + "\n");
       connection.multicast(msg);
     } catch (Exception ex) {
       System.out.println("Exception caught: " + ex);
@@ -119,8 +120,9 @@ public class Sender extends Thread implements Runnable {
   
           // Insert the serialized object into a Spread message.
           SpreadMessage msg = new SpreadMessage();
-          msg.setUnreliable();
+          msg.setSafe();
           msg.addGroup(name);
+          // TODO: Use setObject()
           msg.setData(sendData);
   
           // Send the message and log it.

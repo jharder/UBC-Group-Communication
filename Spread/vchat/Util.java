@@ -73,8 +73,9 @@ public class Util {
 
     // Insert the serialized object into a Spread message.
     SpreadMessage msg = new SpreadMessage();
-    msg.setUnreliable();
+    msg.setSafe();
     msg.addGroup(gName);
+    // TODO: Use setObject()
     msg.setData(sendData);
     
     return msg;

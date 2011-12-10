@@ -4,6 +4,8 @@ package vchat;
 import java.io.*;
 
 public class VideoStream {
+  static final int NUM_REPS = 4;
+  int rep;
 
 	FileInputStream fis; //video file
 	int frame_nb; //current frame nb
@@ -14,6 +16,7 @@ public class VideoStream {
 	//-----------------------------------
 	public VideoStream(String filename) throws Exception {
 		this.filename = filename;
+		rep = 1;
 		initialize(filename);
 	}
 
@@ -26,11 +29,13 @@ public class VideoStream {
 		String length_string;
 		byte[] frame_length = new byte[5];
 		
-		if (fis.available() <= 0) {
-			fis.close();
-			return -1;
+		if (fis.available() <= 0 && rep <= NUM_REPS) {
 			// Restart video
-//			initialize(filename);
+			initialize(filename);
+			rep++;
+		}	else if (fis.available() <= 0) {
+		  fis.close();
+		  return -1;
 		}
 
 		//read current frame length

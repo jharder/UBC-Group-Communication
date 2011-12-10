@@ -15,7 +15,7 @@ import java.io.ObjectOutputStream;
 import java.io.ByteArrayOutputStream;
 
 public class Pinger extends Thread implements Runnable {
-  private static final int NUM_PINGS = 50;
+  private static final int NUM_PINGS = 500;
   private static final int NUM_TESTS = 10;
   private static final int WAIT_PERIOD = 5 * 1000;
   public boolean threadSuspended;
@@ -75,8 +75,9 @@ public class Pinger extends Thread implements Runnable {
       // Create the Spread message.
       SpreadMessage msg = new SpreadMessage();
       // TODO: Use different service levels.
-      msg.setUnreliable();
+      msg.setSafe();
       msg.addGroup(name);
+      // TODO: Use setObject()
       msg.setData(sendData);
 
       Util.log(fStream, "Sending " + numPings + " pings\n");
@@ -118,7 +119,7 @@ public class Pinger extends Thread implements Runnable {
     for(int i = 0; i < (NUM_TESTS + 1); i++) {
       long result = doPings(NUM_PINGS);
       double thisAvgMS = ((double) result) / 1000000; 
-      Util.log(fStream, "\nTest #" + (i) + ": Averaged " + thisAvgMS + " ms.\n\n");
+      Util.log(fStream, "\nTest #," + (i) + ",: Averaged ," + thisAvgMS + ", ms.\n\n");
       if (i > 0) {
         averages[i-1] = result;
       } else {

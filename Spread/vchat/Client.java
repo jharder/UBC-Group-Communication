@@ -200,6 +200,7 @@ public class Client extends Thread implements Runnable {
     String userName = new String("u1");
     String address = null;
     int port = 0;
+    int numInstances = 1;
     ArrayList<String> groupsToJoin = new ArrayList<String>();
     String thrashGroup = "dummy_group";
     String lFileBase = "vchat_log";
@@ -251,6 +252,12 @@ public class Client extends Thread implements Runnable {
         i++;
         groupsToJoin.add(argv[i]);
       }
+      // Check for number of receiver instances to start.
+      else if ((argv[i].compareTo("-m") == 0) && (argv.length > (i + 1))) {
+        // Set the number of instances.
+        i++;
+        numInstances = Integer.parseInt(argv[i]);
+      }
       // Check for video file name. 
       else if ((argv[i].compareTo("-s") == 0) && (argv.length > (i + 1))) {
         // Set the file name.
@@ -282,13 +289,15 @@ public class Client extends Thread implements Runnable {
       s.start();
     }
     if (!groupsToJoin.isEmpty()) {
-      // Create a Receiver object for each group we are subscribing to.
-      for (String g : groupsToJoin) {
-        String rName = userName + "_R" + g;
-        Receiver r = new Receiver(rName, address, port, g, lFileBase + rName, false);
-        monitor.receivers.put(rName, r);
-        r.start();
-        numRcvrs++;
+      // Create a Receiver object for each instance for each group we are subscribing to.
+      for (int i = 0; i < numInstances; i++) {
+        for (String g : groupsToJoin) {
+          String rName = userName + i + "_R" + g;
+          Receiver r = new Receiver(rName, address, port, g, lFileBase + rName, false);
+          monitor.receivers.put(rName, r);
+          r.start();
+          numRcvrs++;
+        }
       }  
     } else if (groupsToJoin.isEmpty() && pingMode) {
       // Create a Pinger object.
