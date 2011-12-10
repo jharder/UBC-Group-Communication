@@ -18,6 +18,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 
 import com.inspirel.yami.Agent;
+import com.inspirel.yami.BadStateException;
 import com.inspirel.yami.IncomingMessage;
 import com.inspirel.yami.IncomingMessageCallback;
 import com.inspirel.yami.Parameters;
@@ -100,42 +101,48 @@ public class Client {
 	private static class UpdateHandler implements IncomingMessageCallback {
 		@Override
 		public void call(IncomingMessage im) throws Exception {
-			framesReceived++;
-			Parameters content = im.getParameters();
-			byte[] frame = new byte[15000];
-			frame = content.getBinary("videoFrame");
-			int frameNum = content.getInteger("frameNum");
-			long serverCRC = content.getLong("crc");
-			String throughputCount = "";
-			String crcMismatch = "";
-			long currentTime = System.currentTimeMillis();
+			try	{
+				framesReceived++;
+				Parameters content = im.getParameters();
+				byte[] frame = new byte[15000];
+				frame = content.getBinary("videoFrame");
+				int frameNum = content.getInteger("frameNum");
+				int frameSize = content.getInteger("frameSize");
+				long serverCRC = content.getLong("crc");
+				String throughputCount = "";
+				String crcMismatch = "";
+				long currentTime = System.currentTimeMillis();
 
-			if (lastFrameNumber > 0 && lastFrameNumber > frameNum && lastFrameNumber != 500 && frameNum != 1) // out of order frame received
-				loggerVideo.severe("Out of order frame received.  Previous frame "+lastFrameNumber+", current frame "+frameNum);
+				if (lastFrameNumber > 0 && lastFrameNumber > frameNum && lastFrameNumber != 500 && frameNum != 1) // out of order frame received
+					loggerVideo.severe("Out of order frame received.  Previous frame "+lastFrameNumber+", current frame "+frameNum);
 
-			if ((currentTime - throughputStartTime) >= 1000) { // new second, restart count
-				throughputCount = "Throughput for the last "+(currentTime - throughputStartTime)+"ms is "+ bytesReceived +" bytes";
-				bytesReceived = 0;
-				throughputStartTime = System.currentTimeMillis();
+				if ((currentTime - throughputStartTime) >= 1000) { // new second, restart count
+					throughputCount = "Throughput for the last "+(currentTime - throughputStartTime)+"ms is "+ bytesReceived +" bytes";
+					bytesReceived = 0;
+					throughputStartTime = System.currentTimeMillis();
+				}
+
+				crc32.reset();
+				crc32.update(frame);
+				long clientCRC = crc32.getValue();
+
+				if (clientCRC != serverCRC) // message is corrupt
+					crcMismatch = ". Corrupt frame received.  Frame number "+frameNum+", server CRC "+ serverCRC +", client CRC "+clientCRC;
+
+				bytesReceivedTotal += frameSize;
+				bytesReceived += frameSize;
+				loggerVideo.fine("Frame: "+ frameNum +" ("+clientCRC+"). Size: "+frameSize +" bytes. "+ throughputCount + crcMismatch);
+				lastFrameNumber = frameNum;
+
+				Toolkit toolkit = Toolkit.getDefaultToolkit();
+				Image imageFrame = toolkit.createImage(frame, 0, frame.length);
+				icon = new ImageIcon(imageFrame);
+				iconLabel.setIcon(icon);
+				crc32.reset();
+			} catch (BadStateException e) {
+				loggerInfo.severe("Error while receiving video packet: "+e.getStackTrace());
 			}
-
-			crc32.reset();
-			crc32.update(frame);
-			long clientCRC = crc32.getValue();
-
-			if (clientCRC != serverCRC) // message is corrupt
-				crcMismatch = ". Corrupt frame received.  Frame number "+frameNum+", server CRC "+ serverCRC +", client CRC "+clientCRC;
-
-			bytesReceivedTotal += content.toString().length();
-			bytesReceived += content.toString().length();
-			loggerVideo.fine("Frame: "+ frameNum +" ("+clientCRC+"). Size: "+content.toString().length() +" bytes. "+ throughputCount + crcMismatch);
-			lastFrameNumber = frameNum;
-
-			Toolkit toolkit = Toolkit.getDefaultToolkit();
-			Image imageFrame = toolkit.createImage(frame, 0, frame.length);
-			icon = new ImageIcon(imageFrame);
-			iconLabel.setIcon(icon);
-			crc32.reset();
+			
 		}
 	}
 
@@ -156,20 +163,20 @@ public class Client {
 			if (args[i].toString().equals("-s")) {
 				i++;
 				serverAddress = "tcp://"+args[i];
-				
+
 			} else if (args[i].toString().equals("--nogui"))
 				gui = false;
 		}
-		
+
 		try {
 			pingTotal = 0;
 			clientID = ManagementFactory.getRuntimeMXBean().getName();
 			clientStartTime = System.currentTimeMillis();
 			crc32 = new CRC32();
 
-			FileHandler clientLogVideo = new FileHandler("client"+clientID+"-video.log");
-			FileHandler clientLogPing = new FileHandler("client"+clientID+"-ping.log");
-			FileHandler clientLogInfo = new FileHandler("client"+clientID+"-info.log");
+			FileHandler clientLogVideo = new FileHandler("client-"+clientID+"-video.log");
+			FileHandler clientLogPing = new FileHandler("client-"+clientID+"-ping.log");
+			FileHandler clientLogInfo = new FileHandler("client-"+clientID+"-info.log");
 			loggerVideo = Logger.getLogger("videoLogger");
 			loggerPing = Logger.getLogger("pingLogger");
 			loggerInfo = Logger.getLogger("InfoLogger");

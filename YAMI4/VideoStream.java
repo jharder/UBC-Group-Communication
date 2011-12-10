@@ -21,7 +21,7 @@ public class VideoStream {
 	// getNextFrame
 	//returns the next frame as an array of byte and the size of the frame
 	//-----------------------------------
-	public int getNextFrame(byte[] frame) throws Exception {
+	public int[] getNextFrame(byte[] frame) throws Exception {
 		int length = 0;
 		String length_string;
 		byte[] frame_length = new byte[5];
@@ -41,7 +41,7 @@ public class VideoStream {
 		fis.read(frame, 0, length);
 		frameNum++;
 		
-		return frameNum; 
+		return new int[]{frameNum,length}; 
 	}
 	
 	private void Initialize(String filename) throws FileNotFoundException {

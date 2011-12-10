@@ -93,7 +93,7 @@ public class Server {
 		byte[] buf = new byte[15000];
 
 		try {
-			video = new VideoStream("C:\\movie.Mjpeg");
+			video = new VideoStream("movie.Mjpeg");
 
 			serverAgent = new Agent();
 			Parameters param = new Parameters();
@@ -109,9 +109,13 @@ public class Server {
 
 			CRC32 crc = new CRC32();
 			long crcValue;
+			int[] videoValue;
+			int frameSize;
 
 			while (true) {
-				frameNum = video.getNextFrame(buf);
+				videoValue = video.getNextFrame(buf);
+				frameNum = videoValue[0];
+				frameSize = videoValue[1];
 				crc.reset();
 				crc.update(buf);
 				crcValue = crc.getValue();
@@ -119,8 +123,9 @@ public class Server {
 				param.setLong("crc", crcValue);
 				param.setBinary("videoFrame", buf);
 				param.setInteger("frameNum", frameNum);
+				param.setInteger("frameSize", buf.length);
 
-				loggerVideo.fine("Frame: "+ frameNum +" ("+crcValue+"). Size: "+param.toString().length() +" bytes");
+				loggerVideo.fine("Frame: "+ frameNum +" ("+crcValue+"). Size: "+frameSize +" bytes");
 				serverAgent.sendOneWay(serverAddress, "video", "publish", param);
 
 				Thread.sleep(40);
